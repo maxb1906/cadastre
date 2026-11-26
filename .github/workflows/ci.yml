@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'jalon-*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Tests Linux + build Windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Tests
+        run: go test ./...
+      - name: Tests race (parseur, pipeline, nettoyage)
+        run: go test -race ./internal/mftscan ./internal/walker ./internal/clean
+      - name: Fuzzing court du parseur NTFS
+        run: |
+          go test ./internal/ntfs -run '^$' -fuzz FuzzParse -fuzztime 30s
+          go test ./internal/ntfs -run '^$' -fuzz FuzzRunlist -fuzztime 15s
+          go test ./internal/snapshot -run '^$' -fuzz FuzzRead -fuzztime 15s
+      - name: Vet Windows
+        run: GOOS=windows GOARCH=amd64 go vet ./...
+      - name: Oracle croisé sur image NTFS (ntfs-3g)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ntfs-3g zstd
+          ./scripts/oracle-linux.sh --lang fr | tee oracle.txt
+          grep -q "Vus seulement par A : 0 " oracle.txt
+      - name: Build Windows
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
+          wails build -platform windows/amd64 -o cadastre.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadastre-exe
+          path: build/bin/cadastre.exe
+
+  windows:
+    name: Tests Windows (VHDX réel)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Tests unitaires
+        run: go test ./...
+      - name: Volume NTFS de test
+        shell: pwsh
+        run: ./scripts/new-testvhd.ps1 -Letter T -SizeMB 2048 -Files 30000
+      - name: Oracle croisé moteur A / moteur C et nettoyage réel
+        shell: pwsh
+        env:
+          CADASTRE_TEST_VOLUME: 'T:'
+        run: |
+          go test ./internal/engine ./internal/clean -run Integration -v
+      - name: Démonstration CLI
+        shell: pwsh
+        run: |
+          go build -o cadastre-cli.exe .
+          ./cadastre-cli.exe scan T: --quiet --report report.html --json report.json --snapshot t.cad | Out-Host
+          ./cadastre-cli.exe check T: | Out-Host
+          ./cadastre-cli.exe clean T: --rule temp --permanent --script clean.ps1 | Out-Host
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rapport-volume-test
+          path: |
+            report.html
+            report.json
+            clean.ps1

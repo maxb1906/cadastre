@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: go test ./...
+      - name: Build
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
+          wails build -platform windows/amd64 -o cadastre.exe -trimpath \
+            -ldflags "-X github.com/maxb1906/cadastre/internal/cli.Version=${VERSION}"
+          cd build/bin && sha256sum cadastre.exe > cadastre.exe.sha256
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" build/bin/cadastre.exe build/bin/cadastre.exe.sha256 --title "Cadastre $GITHUB_REF_NAME" --generate-notes
