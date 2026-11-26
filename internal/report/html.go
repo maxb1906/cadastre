@@ -85,7 +85,7 @@ func ftoa(v float64) string {
 func reclaimable(d *Data) uint64 {
 	var total uint64
 	for _, f := range d.Findings {
-		if f.Deletable || f.Clean == "official" && f.Risk != "red" {
+		if f.Reclaimable {
 			total += f.Alloc
 		}
 	}

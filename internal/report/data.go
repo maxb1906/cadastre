@@ -41,6 +41,7 @@ type FindingData struct {
 	Clean       string        `json:"clean"`
 	Official    string        `json:"official,omitempty"`
 	Deletable   bool          `json:"deletable"`
+	Reclaimable bool          `json:"reclaimable"`
 	Files       uint64        `json:"files"`
 	Size        uint64        `json:"size"`
 	Alloc       uint64        `json:"alloc"`
@@ -155,7 +156,8 @@ func Build(a *analysis.Analysis, opt Options) *Data {
 		fd := FindingData{
 			ID: f.Rule.ID, Title: f.Rule.Title.In(opt.Lang), Category: f.Rule.Category, Risk: f.Rule.Risk,
 			Advice: f.Rule.Advice.In(opt.Lang), Clean: f.Rule.Clean, Deletable: f.Rule.Deletable(),
-			Files: f.Files, Size: f.Size, Alloc: f.Alloc, ADSOnly: f.ADSOnly, Groups: f.Groups,
+			Reclaimable: f.Rule.Reclaimable(),
+			Files:       f.Files, Size: f.Size, Alloc: f.Alloc, ADSOnly: f.ADSOnly, Groups: f.Groups,
 			OlderThan: f.Rule.OlderThan, MinSize: f.Rule.MinSize, CloudSkip: f.CloudSkipped, Unavailable: f.EnvUnavailable,
 		}
 		if f.Rule.HasOfficial() {

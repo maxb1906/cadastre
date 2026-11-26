@@ -100,6 +100,14 @@ type Rule struct {
 // Deletable reports whether Cadastre may delete the rule's items itself.
 func (r *Rule) Deletable() bool { return r.Clean == CleanDelete && r.Risk != RiskRed }
 
+// Reclaimable reports whether the rule's space counts as reclaimable: Cadastre
+// may delete its items itself, or run its official action (never for red
+// rules, whose official action is only offered). It is the single definition
+// behind the "reclaimable" figure of the interface and the reports.
+func (r *Rule) Reclaimable() bool {
+	return r.Deletable() || r.Clean == CleanOfficial && r.Risk != RiskRed
+}
+
 // HasOfficial reports whether the rule has an official action.
 func (r *Rule) HasOfficial() bool { return r.Official != nil && len(r.Official.Steps) > 0 }
 

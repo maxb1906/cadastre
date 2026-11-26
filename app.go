@@ -329,11 +329,7 @@ func (a *App) GetSummary() (*Summary, error) {
 	for _, w := range r.Warnings {
 		s.Warnings = append(s.Warnings, i18n.T(a.lang, w.Key, w.Args...))
 	}
-	for _, f := range cur.Findings {
-		if f.Rule.Deletable() || f.Rule.Clean == rules.CleanOfficial && f.Rule.Risk != rules.RiskRed {
-			s.Reclaimable += f.Alloc
-		}
-	}
+	s.Reclaimable = cur.Reclaimable()
 	return s, nil
 }
 
@@ -461,6 +457,21 @@ func (a *App) Locate(id uint32) (uint32, error) {
 		return id, nil
 	}
 	return ix.Parent[id], nil
+}
+
+// GetItem describes one entry, with its full path as name (cleanup selection).
+func (a *App) GetItem(id uint32) (*view.Item, error) {
+	cur, err := a.current()
+	if err != nil {
+		return nil, err
+	}
+	ix := cur.Result.Index
+	if !ix.Valid(id) {
+		return nil, fmt.Errorf("invalid entry %d", id)
+	}
+	it := view.MakeItem(ix, id, nil)
+	it.Name = ix.Path(id)
+	return &it, nil
 }
 
 // PathOf returns the full path of an entry.

@@ -24,6 +24,8 @@ export function GetFindings():Promise<Array<Record<string, any>>>;
 
 export function GetInfo():Promise<main.Info>;
 
+export function GetItem(arg1:number):Promise<view.Item>;
+
 export function GetSummary():Promise<main.Summary>;
 
 export function GetTopFiles(arg1:number):Promise<Array<view.Item>>;

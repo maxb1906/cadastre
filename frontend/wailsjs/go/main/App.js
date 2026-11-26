@@ -42,6 +42,10 @@ export function GetInfo() {
   return window['go']['main']['App']['GetInfo']();
 }
 
+export function GetItem(arg1) {
+  return window['go']['main']['App']['GetItem'](arg1);
+}
+
 export function GetSummary() {
   return window['go']['main']['App']['GetSummary']();
 }
