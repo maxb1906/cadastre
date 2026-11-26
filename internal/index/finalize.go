@@ -1,10 +1,5 @@
 package index
 
-import (
-	"runtime"
-	"sync"
-)
-
 // OrphansName is the name of the synthetic directory gathering entries whose
 // parent is missing or corrupt. Interfaces translate it.
 const OrphansName = "<orphans>"
@@ -14,13 +9,17 @@ const OrphansName = "<orphans>"
 // single reverse pass, without recursion. It can be called again after
 // MarkRemoved or Append to refresh everything.
 func (ix *Index) Finalize() {
-	ix.computeExts()
+	ix.extCache = nil
 	ix.repairParents()
 	order := ix.buildTree()
 	if ix.reattachUnreached(order) {
 		order = ix.buildTree()
 	}
 	ix.aggregate(order)
+	if c := cap(ix.Names); c > len(ix.Names)+len(ix.Names)/16+4096 {
+		// Release the slack left by append in the name arena.
+		ix.Names = append(make([]byte, 0, len(ix.Names)), ix.Names...)
+	}
 	ix.finalized = true
 }
 
@@ -128,83 +127,4 @@ func (ix *Index) aggregate(order []uint32) {
 		ix.Size[p] += ix.TotalSize(i)
 		ix.Alloc[p] += ix.TotalAlloc(i)
 	}
-}
-
-// computeExts interns the extension of every file in parallel. Each worker
-// interns into a local table; tables are then merged and ids remapped.
-func (ix *Index) computeExts() {
-	n := len(ix.Parent)
-	workers := runtime.GOMAXPROCS(0)
-	if n < 1<<16 {
-		workers = 1
-	}
-	chunk := (n + workers - 1) / workers
-	locals := make([][]string, workers)
-	var wg sync.WaitGroup
-	for w := 0; w < workers; w++ {
-		lo, hi := w*chunk, min((w+1)*chunk, n)
-		wg.Add(1)
-		go func(w, lo, hi int) {
-			defer wg.Done()
-			m := map[string]uint16{"": 0}
-			list := []string{""}
-			var buf [16]byte
-			for i := lo; i < hi; i++ {
-				a := ix.Attr[i]
-				if a&FlagValid == 0 || a&FlagDir != 0 || ix.NameLen[i] == 0 {
-					ix.Ext[i] = 0
-					continue
-				}
-				e := extBytes(ix.NameBytes(uint32(i)), &buf)
-				id, ok := m[string(e)]
-				if !ok {
-					if len(list) >= 1<<16-1 {
-						id = 0
-					} else {
-						id = uint16(len(list))
-						s := string(e)
-						m[s] = id
-						list = append(list, s)
-					}
-				}
-				ix.Ext[i] = id
-			}
-			locals[w] = list
-		}(w, lo, hi)
-	}
-	wg.Wait()
-
-	global := map[string]uint16{}
-	for i, e := range ix.Exts {
-		global[e] = uint16(i)
-	}
-	remap := make([][]uint16, workers)
-	for w, list := range locals {
-		t := make([]uint16, len(list))
-		for li, e := range list {
-			id, ok := global[e]
-			if !ok {
-				if len(ix.Exts) >= 1<<16-1 {
-					id = 0
-				} else {
-					id = uint16(len(ix.Exts))
-					global[e] = id
-					ix.Exts = append(ix.Exts, e)
-				}
-			}
-			t[li] = id
-		}
-		remap[w] = t
-	}
-	for w := 0; w < workers; w++ {
-		lo, hi := w*chunk, min((w+1)*chunk, n)
-		wg.Add(1)
-		go func(t []uint16, lo, hi int) {
-			defer wg.Done()
-			for i := lo; i < hi; i++ {
-				ix.Ext[i] = t[ix.Ext[i]]
-			}
-		}(remap[w], lo, hi)
-	}
-	wg.Wait()
 }

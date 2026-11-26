@@ -63,11 +63,10 @@ type Index struct {
 	Parent  []uint32
 	Size    []uint64 // logical size of the main stream; total for directories after Finalize
 	Alloc   []uint64 // allocated size of the main stream; total for directories after Finalize
-	MTime   []int64  // last write time, Windows FILETIME (100 ns since 1601)
+	MTime   []uint32 // last write time, Unix seconds (see FileTimeToUnix)
 	Attr    []uint32
 	NameOff []uint32
 	NameLen []uint16
-	Ext     []uint16
 	Seq     []uint16 // MFT sequence number (0 when unknown)
 
 	// Children in CSR form, built by Finalize: children of i are
@@ -75,8 +74,7 @@ type Index struct {
 	ChildStart []uint32
 	Children   []uint32
 
-	Names []byte   // name arena (WTF-8)
-	Exts  []string // interned lowercase extensions; Exts[0] = ""
+	Names []byte // name arena (WTF-8)
 
 	// Sparse side tables (rare entries).
 	ADS         map[uint32][]Stream
@@ -92,6 +90,7 @@ type Index struct {
 
 	mu        sync.Mutex
 	finalized bool
+	extCache  []ExtStat
 }
 
 // New returns an index with room for n entries, all invalid.
@@ -100,7 +99,6 @@ func New(n int) *Index {
 		ADS:         map[uint32][]Stream{},
 		Links:       map[uint32][]Link{},
 		DirOwnAlloc: map[uint32]uint64{},
-		Exts:        []string{""},
 		Orphans:     NoParent,
 		Sep:         '\\',
 	}
@@ -120,7 +118,6 @@ func (ix *Index) Resize(n int) {
 	ix.Attr = resize(ix.Attr, n)
 	ix.NameOff = resize(ix.NameOff, n)
 	ix.NameLen = resize(ix.NameLen, n)
-	ix.Ext = resize(ix.Ext, n)
 	ix.Seq = resize(ix.Seq, n)
 	ix.finalized = false
 }
@@ -153,7 +150,7 @@ type Entry struct {
 	Name   string
 	Size   uint64
 	Alloc  uint64
-	MTime  int64
+	MTime  uint32
 	Attr   uint32
 	Seq    uint16
 }
@@ -169,7 +166,6 @@ func (ix *Index) Append(e Entry) uint32 {
 	ix.Attr = append(ix.Attr, e.Attr|FlagValid)
 	ix.NameOff = append(ix.NameOff, uint32(len(ix.Names)))
 	ix.NameLen = append(ix.NameLen, uint16(len(e.Name)))
-	ix.Ext = append(ix.Ext, 0)
 	ix.Seq = append(ix.Seq, e.Seq)
 	ix.Names = append(ix.Names, e.Name...)
 	ix.finalized = false
@@ -196,8 +192,37 @@ func (ix *Index) NameBytes(i uint32) []byte {
 // Name returns the name of entry i.
 func (ix *Index) Name(i uint32) string { return string(ix.NameBytes(i)) }
 
-// ExtName returns the extension of entry i ("" if none).
-func (ix *Index) ExtName(i uint32) string { return ix.Exts[ix.Ext[i]] }
+// ExtName returns the lowercase extension of entry i ("" if none or for a
+// directory).
+func (ix *Index) ExtName(i uint32) string {
+	if ix.Attr[i]&FlagDir != 0 {
+		return ""
+	}
+	var buf [16]byte
+	return string(extBytes(ix.NameBytes(i), &buf))
+}
+
+// FileTimeToUnix converts a Windows FILETIME to the Unix seconds stored in
+// MTime, clamped to the uint32 range (1970-2106).
+func FileTimeToUnix(ft int64) uint32 {
+	const epochDiff = 116444736000000000
+	if ft <= epochDiff {
+		return 0
+	}
+	s := (ft - epochDiff) / 10_000_000
+	if s > 1<<32-1 {
+		return 1<<32 - 1
+	}
+	return uint32(s)
+}
+
+// UnixToFileTime converts MTime back to a FILETIME (second precision).
+func UnixToFileTime(u uint32) int64 {
+	if u == 0 {
+		return 0
+	}
+	return int64(u)*10_000_000 + 116444736000000000
+}
 
 // Kids returns the children of i (valid after Finalize).
 func (ix *Index) Kids(i uint32) []uint32 {

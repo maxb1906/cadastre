@@ -3,8 +3,10 @@ package index
 import (
 	"bytes"
 	"container/heap"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -226,29 +228,69 @@ type ExtStat struct {
 	Alloc uint64
 }
 
-// Extensions returns per-extension totals sorted by allocated size.
+// Extensions returns per-extension totals sorted by allocated size. The
+// result is computed in parallel on first use and cached until the next
+// Finalize.
 func (ix *Index) Extensions() []ExtStat {
-	stats := make([]ExtStat, len(ix.Exts))
-	for i, e := range ix.Exts {
-		stats[i].Ext = e
+	if ix.extCache != nil {
+		return ix.extCache
 	}
-	for i := range ix.Parent {
-		u := uint32(i)
-		if !ix.Valid(u) || ix.Attr[i]&(FlagDir|FlagMeta) != 0 {
-			continue
+	n := len(ix.Parent)
+	workers := runtime.GOMAXPROCS(0)
+	if n < 1<<16 {
+		workers = 1
+	}
+	chunk := (n + workers - 1) / workers
+	parts := make([]map[string]*ExtStat, workers)
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w, lo, hi int) {
+			defer wg.Done()
+			m := map[string]*ExtStat{}
+			var buf [16]byte
+			for i := lo; i < hi; i++ {
+				u := uint32(i)
+				if !ix.Valid(u) || ix.Attr[i]&(FlagDir|FlagMeta) != 0 {
+					continue
+				}
+				e := extBytes(ix.NameBytes(u), &buf)
+				s := m[string(e)]
+				if s == nil {
+					s = &ExtStat{Ext: string(e)}
+					m[s.Ext] = s
+				}
+				s.Files++
+				s.Size += ix.TotalSize(u)
+				s.Alloc += ix.TotalAlloc(u)
+			}
+			parts[w] = m
+		}(w, w*chunk, min((w+1)*chunk, n))
+	}
+	wg.Wait()
+	all := map[string]*ExtStat{}
+	for _, m := range parts {
+		for k, v := range m {
+			if s := all[k]; s != nil {
+				s.Files += v.Files
+				s.Size += v.Size
+				s.Alloc += v.Alloc
+			} else {
+				all[k] = v
+			}
 		}
-		s := &stats[ix.Ext[i]]
-		s.Files++
-		s.Size += ix.TotalSize(u)
-		s.Alloc += ix.TotalAlloc(u)
 	}
-	out := stats[:0]
-	for _, s := range stats {
-		if s.Files > 0 {
-			out = append(out, s)
+	out := make([]ExtStat, 0, len(all))
+	for _, s := range all {
+		out = append(out, *s)
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if out[a].Alloc != out[b].Alloc {
+			return out[a].Alloc > out[b].Alloc
 		}
-	}
-	sort.Slice(out, func(a, b int) bool { return out[a].Alloc > out[b].Alloc })
+		return out[a].Ext < out[b].Ext
+	})
+	ix.extCache = out
 	return out
 }
 
@@ -352,6 +394,6 @@ func lower(c byte) byte {
 // Memory returns the approximate number of bytes used by the index arrays.
 func (ix *Index) Memory() uint64 {
 	n := uint64(cap(ix.Parent))
-	per := uint64(4 + 8 + 8 + 8 + 4 + 4 + 2 + 2 + 2)
+	per := uint64(4 + 8 + 8 + 4 + 4 + 4 + 2 + 2)
 	return n*per + uint64(cap(ix.ChildStart)+cap(ix.Children))*4 + uint64(cap(ix.Names))
 }
