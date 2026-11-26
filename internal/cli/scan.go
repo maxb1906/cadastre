@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/maxb1906/cadastre/internal/analysis"
 	"github.com/maxb1906/cadastre/internal/engine"
 	"github.com/maxb1906/cadastre/internal/i18n"
 	"github.com/maxb1906/cadastre/internal/report"
+	"github.com/maxb1906/cadastre/internal/rules"
 	"github.com/maxb1906/cadastre/internal/units"
 )
 
@@ -18,6 +21,8 @@ func runScan(ctx context.Context, env *Env, args []string) error {
 	minSize := fs.String("min-size", "0", i18n.T(env.Lang, "cli.flag.minsize"))
 	quiet := fs.Bool("quiet", false, i18n.T(env.Lang, "cli.flag.quiet"))
 	eng := fs.String("engine", "auto", i18n.T(env.Lang, "cli.flag.engine"))
+	var ruleFiles multiFlag
+	fs.Var(&ruleFiles, "rules", i18n.T(env.Lang, "cli.flag.rules"))
 	pos, err := parseFlags(fs, args)
 	if err != nil {
 		return errUsage
@@ -46,7 +51,12 @@ func runScan(ctx context.Context, env *Env, args []string) error {
 	if !*quiet {
 		fmt.Fprint(env.Stderr, "\r\033[K")
 	}
-	return report.WriteText(env.Stdout, res, *top, env.Lang)
+	cat, err := rules.Load(ruleFiles...)
+	if err != nil {
+		return err
+	}
+	a := analysis.Run(res, cat, analysis.Options{})
+	return report.WriteText(env.Stdout, a, *top, env.Lang)
 }
 
 func progressPrinter(env *Env) func(engine.Progress) {
@@ -66,3 +76,9 @@ func progressPrinter(env *Env) func(engine.Progress) {
 		}
 	}
 }
+
+// multiFlag collects a repeatable string flag.
+type multiFlag []string
+
+func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }

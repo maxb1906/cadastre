@@ -8,15 +8,30 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/maxb1906/cadastre/internal/engine"
+	"github.com/maxb1906/cadastre/internal/analysis"
 	"github.com/maxb1906/cadastre/internal/i18n"
 	"github.com/maxb1906/cadastre/internal/index"
+	"github.com/maxb1906/cadastre/internal/reclaim"
+	"github.com/maxb1906/cadastre/internal/rules"
 	"github.com/maxb1906/cadastre/internal/units"
 )
 
-// WriteText prints a console summary with the top n files, folders and
-// extensions.
-func WriteText(w io.Writer, r *engine.Result, n int, lang string) error {
+// RiskMark returns the symbol of a risk level.
+func RiskMark(risk string) string {
+	switch risk {
+	case rules.RiskGreen:
+		return "🟢"
+	case rules.RiskOrange:
+		return "🟠"
+	default:
+		return "🔴"
+	}
+}
+
+// WriteText prints a console summary: ghost findings, space
+// reconciliation, then the top n files, folders and extensions.
+func WriteText(w io.Writer, a *analysis.Analysis, n int, lang string) error {
+	r := a.Result
 	ix := r.Index
 	p := i18n.Printer{Lang: lang}
 	t := ix.Totals()
@@ -35,6 +50,42 @@ func WriteText(w io.Writer, r *engine.Result, n int, lang string) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', tabwriter.AlignRight)
 	section := func(title string) {
 		fmt.Fprintf(w, "%s\n%s\n", title, strings.Repeat("─", len([]rune(title))))
+	}
+
+	section(p.T("ghosts.title"))
+	if len(a.Findings) == 0 {
+		fmt.Fprintln(w, "  "+p.T("ghosts.none"))
+	} else {
+		fmt.Fprintf(tw, "\t%s\t%s\t %s\n", p.T("col.alloc"), p.T("col.files"), p.T("col.rule"))
+	}
+	for _, f := range a.Findings {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t %s (%s)\n", RiskMark(f.Rule.Risk), b(f.Alloc), units.Count(f.Files, lang), f.Rule.Title.In(lang), f.Rule.ID)
+	}
+	tw.Flush()
+	for _, f := range a.Findings {
+		for _, g := range f.Groups {
+			fmt.Fprintf(w, "    %s · %s : %s\n", f.Rule.Title.In(lang), g.Label, b(g.Alloc))
+		}
+	}
+	fmt.Fprintln(w)
+
+	if rc := a.Recon; rc != nil && rc.Used > 0 {
+		section(p.T("recon.title"))
+		fmt.Fprintf(w, "  %s\n", p.T("recon.summary", b(rc.Used), b(rc.Total), b(rc.Get(reclaim.Files).Bytes)))
+		if rc.Missing > 0 {
+			fmt.Fprintf(w, "  %s\n", p.T("recon.missing", b(uint64(rc.Missing))))
+		}
+		for _, c := range rc.Components {
+			if c.Key == reclaim.Files || c.Bytes == 0 {
+				continue
+			}
+			fmt.Fprintf(tw, "%s\t %s\n", b(c.Bytes), p.T("recon."+c.Key))
+		}
+		tw.Flush()
+		for _, note := range rc.Notes {
+			fmt.Fprintf(w, "  ! %s\n", p.T(note))
+		}
+		fmt.Fprintln(w)
 	}
 	section(p.T("top.files"))
 	fmt.Fprintf(tw, "%s\t%s\t %s\n", p.T("col.alloc"), p.T("col.size"), p.T("col.path"))
