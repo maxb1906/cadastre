@@ -32,6 +32,7 @@ type command struct {
 func commands() []command {
 	return []command{
 		{"scan", "cli.cmd.scan", runScan},
+		{"check", "cli.cmd.check", runCheck},
 		{"version", "cli.cmd.version", runVersion},
 		{"help", "cli.cmd.help", nil},
 	}
