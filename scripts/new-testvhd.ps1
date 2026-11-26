@@ -63,9 +63,11 @@ compact /c /exe:lzx /q "$r\data\wof.txt" | Out-Null                             
 cmd /c mklink /J "$r\data\junction" "$r\Windows" | Out-Null
 cmd /c mklink "$r\data\symlink.bin" "$r\data\big.bin" | Out-Null
 Set-Content -LiteralPath "$r\data\日本語 😀 été.txt" -Value 'unicode'
-$deep = "\\?\$r" + (1..25 | ForEach-Object { "niveau-$_-abcdefghij" }) -join '\'
-New-Item -ItemType Directory -Path $deep -Force | Out-Null
-Set-Content -LiteralPath "$deep\fond.txt" -Value 'deep'
+# Path > 260 characters. .NET (PowerShell 7) handles long paths natively;
+# New-Item -Path would read the "?" of a \\?\ prefix as a wildcard.
+$deep = $r + ((1..25 | ForEach-Object { "niveau-$_-abcdefghij" }) -join '\')
+[System.IO.Directory]::CreateDirectory($deep) | Out-Null
+[System.IO.File]::WriteAllText("$deep\fond.txt", 'deep')
 $old = (Get-Date).AddDays(-30)
 foreach ($t in "$r\Windows\Temp\old.tmp", "$r\Users\alice\AppData\Local\Temp\old.tmp") {
     fsutil file createnew $t 1048576 | Out-Null
