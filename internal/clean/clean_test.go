@@ -413,7 +413,42 @@ func TestEstimateReclaim(t *testing.T) {
 	}
 	// Without administrator rights, system zones cannot be cleaned: their
 	// space is not reclaimable.
-	if na := EstimateReclaim(a, Env{}); na.ByRule["temp"] != 0 || na.ByRule["memory-dumps"] != 0 || na.ByRule["node-modules"] == 0 || na.Total >= est.Total {
-		t.Errorf("without admin: %v", na.ByRule)
+	if na := EstimateReclaim(a, Env{}); na.ByRule["temp"] != 0 || na.ByRule["memory-dumps"] != 0 || na.ByRule["node-modules"] == 0 || na.Total >= est.Total || na.Total+na.AdminOnly != est.Total || est.AdminOnly != 0 {
+		t.Errorf("without admin: %v (+%d admin)", na.ByRule, na.AdminOnly)
+	}
+}
+
+func TestSuggested(t *testing.T) {
+	v := newVolume(t)
+	v.mk("hiberfil.sys", 9000, 0)
+	v.mk("Windows/SoftwareDistribution/Download/x.esd", 700, 0)
+	a := analyze(t, v.root)
+	est := EstimateReclaim(a, Env{Admin: true})
+	has := func(ids []string, id string) bool {
+		for _, x := range ids {
+			if x == id {
+				return true
+			}
+		}
+		return false
+	}
+	green := Suggested(a, est, false)
+	for _, id := range []string{"temp", "node-modules", "memory-dumps"} {
+		if !has(green, id) {
+			t.Errorf("green suggestion misses %s: %v", id, green)
+		}
+	}
+	for _, id := range []string{"windows-update-cache", "hibernation", "component-store", "pagefile"} {
+		if has(green, id) {
+			t.Errorf("green suggestion has %s", id)
+		}
+	}
+	all := Suggested(a, est, true)
+	if !has(all, "windows-update-cache") || has(all, "hibernation") || has(all, "component-store") {
+		t.Errorf("with orange: %v", all)
+	}
+	// Without administrator rights, nothing in system zones is suggested.
+	if na := Suggested(a, EstimateReclaim(a, Env{}), true); has(na, "temp") || has(na, "windows-update-cache") || !has(na, "node-modules") {
+		t.Errorf("without admin: %v", na)
 	}
 }
