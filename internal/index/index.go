@@ -356,3 +356,32 @@ func extBytes(name []byte, buf *[16]byte) []byte {
 	}
 	return buf[:len(ext)]
 }
+
+// Graft replaces the children of dir with the tree of sub (a fresh scan of
+// the same folder, whose root stands for dir). Call Finalize afterwards.
+func (ix *Index) Graft(dir uint32, sub *Index) {
+	for _, k := range ix.Kids(dir) {
+		ix.MarkRemoved(k)
+	}
+	mapping := make(map[uint32]uint32, sub.Len())
+	mapping[sub.Root] = dir
+	sub.Walk(sub.Root, func(j uint32) bool {
+		if j == sub.Root {
+			return true
+		}
+		if !sub.Valid(j) {
+			return false
+		}
+		p, ok := mapping[sub.Parent[j]]
+		if !ok {
+			return false
+		}
+		n := ix.Append(Entry{Parent: p, Name: sub.Name(j), Size: sub.Size[j], Alloc: sub.Alloc[j], MTime: sub.MTime[j], Attr: sub.Attr[j] &^ FlagValid, Seq: sub.Seq[j]})
+		mapping[j] = n
+		return true
+	})
+	if sub.IsDir(sub.Root) {
+		ix.DirOwnAlloc[dir] = sub.DirOwnAlloc[sub.Root]
+	}
+	ix.finalized = false
+}
