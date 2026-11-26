@@ -47,8 +47,8 @@ func Prepare(p *Plan, fs FS) {
 			p.Bytes += it.Alloc
 		}
 	}
-	for _, o := range p.Official {
-		p.Bytes += o.Alloc
+	for k := range p.Official {
+		p.Bytes += p.Official[k].freed()
 	}
 	p.Prepared = true
 }

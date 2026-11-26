@@ -83,6 +83,17 @@ type Official struct {
 	System       bool       `json:"system"`
 
 	byItems bool // the space is that of Items (a "clean: items" step)
+	// Reclaims tells whether the action really frees Alloc (see
+	// rules.Rule.Reclaimable); otherwise its gain is unknown and not counted.
+	Reclaims bool `json:"reclaims"`
+}
+
+// freed is the space the action counts in the plan total.
+func (o *Official) freed() uint64 {
+	if !o.Reclaims {
+		return 0
+	}
+	return o.Alloc
 }
 
 // settle bases the space of an action that deletes items on the items it
@@ -390,7 +401,7 @@ func systemArea(segs []string) bool {
 
 func (b *builder) addOfficial(r *rules.Rule, f *rules.Finding, sel Selection) {
 	ix := b.ix
-	o := Official{Rule: r.ID, Title: r.Official.Title, Risk: r.Risk, RestorePoint: r.Official.RestorePoint, System: r.System}
+	o := Official{Rule: r.ID, Title: r.Official.Title, Risk: r.Risk, RestorePoint: r.Official.RestorePoint, System: r.System, Reclaims: r.Reclaimable()}
 	for _, i := range f.Items {
 		o.Targets = append(o.Targets, ix.Path(i))
 		o.Alloc += ix.TotalAlloc(i)
@@ -442,6 +453,10 @@ type Action struct {
 	Risk  string `json:"risk"`
 	Files int    `json:"files"` // files deleted (folders left out)
 	Bytes uint64 `json:"bytes"` // space expected to be freed
+	// NoGain: an official action whose gain is unknown (configuration
+	// change, compaction); Bytes is 0 and Found tells what it applies to.
+	NoGain bool   `json:"noGain,omitempty"`
+	Found  uint64 `json:"found,omitempty"`
 }
 
 // Actions lists every concrete action of the plan, one per rule: direct
@@ -463,7 +478,10 @@ func (p *Plan) Actions() []Action {
 		}
 	}
 	for _, o := range p.Official {
-		a := Action{Rule: o.Rule, Kind: ActionOfficial, Risk: o.Risk, Bytes: o.Alloc}
+		a := Action{Rule: o.Rule, Kind: ActionOfficial, Risk: o.Risk, Bytes: o.freed(), NoGain: !o.Reclaims}
+		if a.NoGain {
+			a.Found = o.Alloc
+		}
 		for _, it := range o.Items {
 			if !it.Dir {
 				a.Files++
@@ -499,7 +517,7 @@ func (b *builder) finish() {
 			b.p.Bytes += it.Alloc
 		}
 	}
-	for _, o := range b.p.Official {
-		b.p.Bytes += o.Alloc
+	for k := range b.p.Official {
+		b.p.Bytes += b.p.Official[k].freed()
 	}
 }

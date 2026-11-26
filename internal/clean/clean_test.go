@@ -359,7 +359,8 @@ func TestPlanActions(t *testing.T) {
 		if sum != p.Bytes {
 			t.Errorf("%s: actions sum %d, plan bytes %d", stage, sum, p.Bytes)
 		}
-		if ac := kinds["component-store"]; ac.Kind != ActionOfficial || ac.Bytes == 0 || ac.Files != 0 {
+		// DISM's gain is unknown: shown, never counted in the total.
+		if ac := kinds["component-store"]; ac.Kind != ActionOfficial || ac.Bytes != 0 || !ac.NoGain || ac.Found == 0 || ac.Files != 0 {
 			t.Errorf("%s: WinSxS action %+v", stage, ac)
 		}
 		if ac := kinds["node-modules"]; ac.Kind != ActionDelete || ac.Files != 2 {
