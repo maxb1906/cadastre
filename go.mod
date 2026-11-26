@@ -6,6 +6,7 @@ require (
 	github.com/klauspost/compress v1.20.5
 	github.com/wailsapp/wails/v2 v2.17.1
 	golang.org/x/sys v0.50.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

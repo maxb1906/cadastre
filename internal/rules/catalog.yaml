@@ -1,0 +1,347 @@
+# Catalogue « fantômes » de Cadastre (règles v1).
+#
+# Chemins relatifs à la racine du volume scanné, séparateur \ ou /,
+# insensibles à la casse. « * » = un segment (joker), « ** » = zéro ou
+# plusieurs dossiers. Cibles :
+#   item     : l'élément trouvé lui-même (fichier ou dossier entier)
+#   contents : les enfants directs du dossier trouvé (le dossier est conservé)
+#   files    : tous les fichiers sous le dossier trouvé (récursif)
+# Risque : green (sûr), orange (avec précaution, confirmation explicite),
+# red (jamais supprimé par Cadastre : action officielle ou signalement).
+# clean : delete (suppression par Cadastre), official (action officielle
+# uniquement), none (signalement).
+# Placeholders des actions : {path} {path_ps} {drive} {logname} {backup}.
+
+rules:
+  - id: memory-dumps
+    category: dumps
+    risk: green
+    title: {fr: "Dumps mémoire", en: "Memory dumps"}
+    advice: {fr: "Supprimer après analyse éventuelle (WinDbg).", en: "Delete after optional analysis (WinDbg)."}
+    paths:
+      - 'Windows\MEMORY.DMP'
+      - 'Windows\Minidump'
+      - 'Windows\LiveKernelReports'
+      - 'Users\*\AppData\Local\CrashDumps'
+      - 'ProgramData\Microsoft\Windows\WER\ReportQueue\**\*.dmp'
+    target: files
+    system: true
+    clean: delete
+
+  - id: wer-reports
+    category: wer
+    risk: green
+    title: {fr: "Rapports d'erreurs Windows", en: "Windows Error Reporting"}
+    advice: {fr: "Supprimer.", en: "Delete."}
+    paths:
+      - 'ProgramData\Microsoft\Windows\WER\ReportArchive'
+      - 'ProgramData\Microsoft\Windows\WER\ReportQueue'
+      - 'ProgramData\Microsoft\Windows\WER\Temp'
+      - 'Users\*\AppData\Local\Microsoft\Windows\WER'
+    target: files
+    system: true
+    clean: delete
+
+  - id: windows-update-cache
+    category: windows-update
+    risk: orange
+    title: {fr: "Cache Windows Update", en: "Windows Update cache"}
+    advice:
+      fr: "Arrêter wuauserv et bits, vider SoftwareDistribution\\Download, relancer les services."
+      en: "Stop wuauserv and bits, empty SoftwareDistribution\\Download, restart the services."
+    paths: ['Windows\SoftwareDistribution\Download']
+    target: contents
+    system: true
+    permanent: true
+    clean: delete
+    official:
+      title: {fr: "Arrêt des services, vidage, relance", en: "Stop services, empty, restart"}
+      steps:
+        - run: [net, stop, wuauserv]
+        - run: [net, stop, bits]
+        - clean: items
+        - run: [net, start, bits]
+        - run: [net, start, wuauserv]
+
+  - id: delivery-optimization
+    category: windows-update
+    risk: orange
+    title: {fr: "Optimisation de distribution", en: "Delivery Optimization"}
+    advice: {fr: "Delete-DeliveryOptimizationCache (PowerShell).", en: "Delete-DeliveryOptimizationCache (PowerShell)."}
+    paths: ['Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache']
+    target: item
+    system: true
+    clean: official
+    official:
+      title: {fr: "Delete-DeliveryOptimizationCache", en: "Delete-DeliveryOptimizationCache"}
+      steps:
+        - run: [powershell.exe, -NoProfile, -NonInteractive, -Command, "Delete-DeliveryOptimizationCache -Force"]
+
+  - id: component-store
+    category: component-store
+    risk: red
+    title: {fr: "Magasin de composants (WinSxS)", en: "Component store (WinSxS)"}
+    advice:
+      fr: "Jamais à la main. DISM /Online /Cleanup-Image /StartComponentCleanup. La taille affichée compte les liens durs une seule fois."
+      en: "Never by hand. DISM /Online /Cleanup-Image /StartComponentCleanup. The size shown counts hard links once."
+    paths: ['Windows\WinSxS']
+    target: item
+    system: true
+    clean: official
+    official:
+      title: {fr: "DISM StartComponentCleanup", en: "DISM StartComponentCleanup"}
+      restore_point: true
+      steps:
+        - run: [Dism.exe, /Online, /Cleanup-Image, /StartComponentCleanup]
+
+  - id: upgrade-leftovers
+    category: upgrade
+    risk: orange
+    title: {fr: "Restes de mise à niveau", en: "Upgrade leftovers"}
+    advice:
+      fr: "Nettoyage de disque (« Installation(s) précédente(s) de Windows ») ou Paramètres > Stockage. Le retour arrière ne sera plus possible."
+      en: "Disk Cleanup (\"Previous Windows installation(s)\") or Settings > Storage. Rolling back will no longer be possible."
+    paths: ['Windows.old', '$Windows.~BT', '$Windows.~WS']
+    target: item
+    system: true
+    clean: official
+    official:
+      title: {fr: "Nettoyage de disque", en: "Disk Cleanup"}
+      steps:
+        - run: [cleanmgr.exe, "/d", "{drive}"]
+
+  - id: installer-orphans
+    category: installer
+    risk: red
+    title: {fr: "Windows Installer orphelins", en: "Orphaned Windows Installer files"}
+    advice:
+      fr: "Signalement seulement : .msi/.msp de C:\\Windows\\Installer non référencés par le registre. Ne jamais supprimer à la main."
+      en: "Report only: .msi/.msp in C:\\Windows\\Installer not referenced by the registry. Never delete by hand."
+    paths: ['Windows\Installer']
+    names: ['*.msi', '*.msp']
+    target: files
+    builtin: installer-orphans
+    clean: none
+
+  - id: iis-logs
+    category: logs
+    risk: green
+    title: {fr: "Journaux IIS", en: "IIS logs"}
+    advice:
+      fr: "Supprimer au-delà de 30 jours et configurer une rotation (IIS > Journalisation)."
+      en: "Delete beyond 30 days and set up rotation (IIS > Logging)."
+    paths: ['inetpub\logs\LogFiles\W3SVC*', 'inetpub\logs\LogFiles\FTPSVC*', 'inetpub\logs\LogFiles\HTTPERR']
+    target: files
+    older_than: 30d
+    system: true
+    clean: delete
+
+  - id: web-server-logs
+    category: logs
+    risk: green
+    title: {fr: "Journaux Apache / Nginx", en: "Apache / Nginx logs"}
+    advice: {fr: "Supprimer au-delà de 30 jours et configurer logrotate/rotatelogs.", en: "Delete beyond 30 days and set up logrotate/rotatelogs."}
+    paths: ['**\Apache*\logs', '**\httpd*\logs', '**\nginx*\logs', '**\xampp\apache\logs']
+    target: files
+    older_than: 30d
+    clean: delete
+
+  - id: windows-logs
+    category: logs
+    risk: orange
+    title: {fr: "Journaux Windows (CBS, Panther, ETL)", en: "Windows logs (CBS, Panther, ETL)"}
+    advice: {fr: "Archiver puis supprimer (les .cab de CBS, les gros .etl).", en: "Archive then delete (CBS .cab files, large .etl files)."}
+    paths: ['Windows\Logs\CBS', 'Windows\Panther', 'Windows\Logs\WindowsUpdate', 'Windows\Logs\DISM', 'Windows\Logs\MoSetup']
+    target: files
+    older_than: 7d
+    system: true
+    clean: delete
+
+  - id: large-etl
+    category: logs
+    risk: orange
+    title: {fr: "Traces ETL obèses", en: "Oversized ETL traces"}
+    advice: {fr: "Vérifier la session de trace qui les produit, puis supprimer.", en: "Check the trace session producing them, then delete."}
+    paths: ['**']
+    names: ['*.etl']
+    target: files
+    min_size: 100M
+    system: true
+    clean: delete
+
+  - id: event-logs
+    category: event-logs
+    risk: orange
+    title: {fr: "Journaux d'événements démesurés", en: "Oversized event logs"}
+    advice: {fr: "wevtutil epl (export) puis wevtutil cl, et réduire la taille maximale du journal.", en: "wevtutil epl (export) then wevtutil cl, and lower the log maximum size."}
+    paths: ['Windows\System32\winevt\Logs']
+    names: ['*.evtx']
+    target: files
+    min_size: 256M
+    system: true
+    clean: official
+    official:
+      title: {fr: "Export puis purge (wevtutil)", en: "Export then clear (wevtutil)"}
+      per_item: true
+      steps:
+        - run: [wevtutil.exe, epl, "{logname}", "{backup}"]
+        - run: [wevtutil.exe, cl, "{logname}"]
+
+  - id: temp
+    category: temp
+    risk: green
+    title: {fr: "Fichiers temporaires", en: "Temporary files"}
+    advice: {fr: "Supprimer les fichiers de plus de 7 jours.", en: "Delete files older than 7 days."}
+    paths: ['Windows\Temp', 'Users\*\AppData\Local\Temp']
+    target: files
+    older_than: 7d
+    system: true
+    permanent: true
+    clean: delete
+
+  - id: recycle-bins
+    category: recycle-bin
+    risk: green
+    title: {fr: "Corbeilles", en: "Recycle bins"}
+    advice: {fr: "Vider (la corbeille de chaque utilisateur est indiquée).", en: "Empty (each user's bin is shown)."}
+    paths: ['$Recycle.Bin\*']
+    target: contents
+    builtin: recycle-bins
+    system: true
+    permanent: true
+    clean: delete
+
+  - id: hibernation
+    category: system-files
+    risk: orange
+    title: {fr: "Fichier d'hibernation", en: "Hibernation file"}
+    advice: {fr: "powercfg /h off (désactive aussi le démarrage rapide).", en: "powercfg /h off (also disables fast startup)."}
+    paths: ['hiberfil.sys']
+    target: item
+    system: true
+    clean: official
+    official:
+      title: {fr: "powercfg /h off", en: "powercfg /h off"}
+      steps:
+        - run: [powercfg.exe, /h, "off"]
+
+  - id: pagefile
+    category: system-files
+    risk: orange
+    title: {fr: "Fichiers d'échange", en: "Paging files"}
+    advice:
+      fr: "Revoir le dimensionnement (Système > Paramètres avancés > Performances > Mémoire virtuelle). Jamais de suppression directe."
+      en: "Review sizing (System > Advanced settings > Performance > Virtual memory). Never delete directly."
+    paths: ['pagefile.sys', 'swapfile.sys']
+    target: item
+    clean: none
+
+  - id: virtual-disks
+    category: virtual-disks
+    risk: orange
+    title: {fr: "Disques virtuels (WSL, Docker, Hyper-V)", en: "Virtual disks (WSL, Docker, Hyper-V)"}
+    advice:
+      fr: "Compacter : wsl --shutdown puis Optimize-VHD -Mode Full (module Hyper-V), ou diskpart compact vdisk. Le disque doit être détaché."
+      en: "Compact: wsl --shutdown then Optimize-VHD -Mode Full (Hyper-V module), or diskpart compact vdisk. The disk must be detached."
+    paths: ['**']
+    names: ['*.vhdx', '*.vhd', '*.avhdx']
+    target: files
+    min_size: 1G
+    clean: official
+    official:
+      title: {fr: "Optimize-VHD -Mode Full", en: "Optimize-VHD -Mode Full"}
+      per_item: true
+      steps:
+        - run: [powershell.exe, -NoProfile, -NonInteractive, -Command, "Optimize-VHD -Path {path_ps} -Mode Full"]
+
+  - id: iso-images
+    category: virtual-disks
+    risk: orange
+    title: {fr: "Images ISO", en: "ISO images"}
+    advice: {fr: "Supprimer celles qui ne servent plus.", en: "Delete the ones no longer needed."}
+    paths: ['**']
+    names: ['*.iso']
+    target: files
+    min_size: 100M
+    clean: delete
+
+  - id: node-modules
+    category: dev-caches
+    risk: green
+    title: {fr: "node_modules", en: "node_modules"}
+    advice: {fr: "Supprimer (npm install les régénère).", en: "Delete (npm install regenerates them)."}
+    paths: ['**\node_modules']
+    target: item
+    min_size: 10M
+    clean: delete
+
+  - id: package-caches
+    category: dev-caches
+    risk: green
+    title: {fr: "Caches de paquets (npm, NuGet, pip, Gradle…)", en: "Package caches (npm, NuGet, pip, Gradle...)"}
+    advice: {fr: "Supprimer (régénérables au prochain build).", en: "Delete (regenerated by the next build)."}
+    paths:
+      - 'Users\*\AppData\Local\npm-cache'
+      - 'Users\*\AppData\Roaming\npm-cache'
+      - 'Users\*\.nuget\packages'
+      - 'Users\*\AppData\Local\pip\cache'
+      - 'Users\*\.gradle\caches'
+      - 'Users\*\AppData\Local\Yarn\Cache'
+      - 'Users\*\AppData\Local\pnpm\store'
+      - 'Users\*\.cargo\registry\cache'
+      - 'Users\*\go\pkg\mod\cache'
+    target: contents
+    clean: delete
+
+  - id: browser-caches
+    category: browser-caches
+    risk: green
+    title: {fr: "Caches des navigateurs", en: "Browser caches"}
+    advice: {fr: "Supprimer, navigateur fermé.", en: "Delete with the browser closed."}
+    paths:
+      - 'Users\*\AppData\Local\Google\Chrome\User Data\*\Cache'
+      - 'Users\*\AppData\Local\Google\Chrome\User Data\*\Code Cache'
+      - 'Users\*\AppData\Local\Google\Chrome\User Data\*\GPUCache'
+      - 'Users\*\AppData\Local\Microsoft\Edge\User Data\*\Cache'
+      - 'Users\*\AppData\Local\Microsoft\Edge\User Data\*\Code Cache'
+      - 'Users\*\AppData\Local\Microsoft\Edge\User Data\*\GPUCache'
+      - 'Users\*\AppData\Local\BraveSoftware\Brave-Browser\User Data\*\Cache'
+      - 'Users\*\AppData\Local\Mozilla\Firefox\Profiles\*\cache2'
+    target: files
+    close_first: [chrome.exe, msedge.exe, brave.exe, firefox.exe]
+    clean: delete
+
+  - id: old-backups
+    category: backups
+    risk: orange
+    title: {fr: "Sauvegardes SQL et fichiers Outlook anciens", en: "Old SQL backups and Outlook files"}
+    advice:
+      fr: "Signalement : vérifier la politique de rétention (SQL) ou si le profil Outlook existe encore (.ost)."
+      en: "Report: check the retention policy (SQL) or whether the Outlook profile still exists (.ost)."
+    paths: ['**']
+    names: ['*.bak', '*.trn', '*.ost']
+    target: files
+    older_than: 90d
+    min_size: 100M
+    clean: none
+
+  - id: ghost-profiles
+    category: profiles
+    risk: orange
+    title: {fr: "Profils fantômes", en: "Ghost profiles"}
+    advice:
+      fr: "Signalement : profils dont le compte n'existe plus. Supprimer par Paramètres système avancés > Profils des utilisateurs, ou Get-CimInstance Win32_UserProfile | ? SID -eq '<SID>' | Remove-CimInstance."
+      en: "Report: profiles whose account no longer exists. Remove via Advanced system settings > User profiles, or Get-CimInstance Win32_UserProfile | ? SID -eq '<SID>' | Remove-CimInstance."
+    paths: ['Users\*']
+    target: item
+    builtin: ghost-profiles
+    clean: none
+
+  - id: large-ads
+    category: ads
+    risk: orange
+    title: {fr: "Flux de données alternatifs volumineux", en: "Large alternate data streams"}
+    advice: {fr: "Signalement : vérifier l'application qui les écrit (Get-Item -Stream *).", en: "Report: check the application writing them (Get-Item -Stream *)."}
+    builtin: large-ads
+    min_size: 1M
+    clean: none
