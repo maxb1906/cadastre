@@ -281,3 +281,17 @@ func TestGlob(t *testing.T) {
 		}
 	}
 }
+
+func TestExampleRulesFile(t *testing.T) {
+	cat, err := Load("../../rules/exemple-perso.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := cat.Get("iis-logs")
+	if !ok || r.OlderThanDuration() != 90*24*time.Hour {
+		t.Error("example should override iis-logs")
+	}
+	if _, ok := cat.Get("app-logs"); !ok {
+		t.Error("app-logs missing")
+	}
+}

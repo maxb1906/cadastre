@@ -1,0 +1,43 @@
+# Exemple de règles maison pour Cadastre.
+# Utilisation : cadastre scan C: --rules rules\exemple-perso.yaml
+#               cadastre clean C: --rules rules\exemple-perso.yaml --rule app-logs
+#
+# Même format que le catalogue intégré (internal/rules/catalog.yaml).
+# Une règle qui reprend l'identifiant d'une règle intégrée la remplace.
+# Une règle « red » n'est jamais supprimable, quoi qu'indique « clean ».
+
+rules:
+  # Journaux d'une application métier, gardés 14 jours.
+  - id: app-logs
+    category: logs
+    risk: green
+    title: {fr: "Journaux de MonAppli", en: "MyApp logs"}
+    advice: {fr: "Supprimer au-delà de 14 jours.", en: "Delete beyond 14 days."}
+    paths: ['ProgramData\MonAppli\Logs', 'MonAppli\logs']
+    names: ['*.log', '*.log.*']
+    target: files
+    older_than: 14d
+    clean: delete
+
+  # Sauvegardes locales d'un logiciel, à signaler seulement.
+  - id: local-backups
+    category: backups
+    risk: orange
+    title: {fr: "Sauvegardes locales", en: "Local backups"}
+    advice: {fr: "Vérifier qu'elles sont externalisées avant de les supprimer.", en: "Check they are stored elsewhere before deleting them."}
+    paths: ['Backup', 'Sauvegardes']
+    target: item
+    min_size: 1G
+    clean: none
+
+  # Remplace la règle intégrée « iis-logs » pour garder 90 jours au lieu de 30.
+  - id: iis-logs
+    category: logs
+    risk: green
+    title: {fr: "Journaux IIS (90 jours)", en: "IIS logs (90 days)"}
+    advice: {fr: "Supprimer au-delà de 90 jours.", en: "Delete beyond 90 days."}
+    paths: ['inetpub\logs\LogFiles\W3SVC*']
+    target: files
+    older_than: 90d
+    system: true
+    clean: delete
