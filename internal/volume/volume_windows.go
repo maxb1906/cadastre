@@ -179,4 +179,3 @@ func volumeRoot(root string) string {
 	}
 	return windows.UTF16ToString(buf[:])
 }
-

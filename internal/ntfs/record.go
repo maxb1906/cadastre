@@ -202,12 +202,12 @@ func (r *Record) BestName() (fn FileName, ok bool) {
 
 func (r *Record) reset() {
 	*r = Record{
-		Names:    r.Names[:0],
-		Streams:  r.Streams[:0],
-		AttrList: r.AttrList[:0],
+		Names:               r.Names[:0],
+		Streams:             r.Streams[:0],
+		AttrList:            r.AttrList[:0],
 		AttrListNonResident: r.AttrListNonResident[:0],
-		DataRuns: r.DataRuns[:0],
-		NameBuf:  r.NameBuf[:0],
+		DataRuns:            r.DataRuns[:0],
+		NameBuf:             r.NameBuf[:0],
 	}
 }
 

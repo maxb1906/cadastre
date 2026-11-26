@@ -10,9 +10,9 @@ func TestRoundTrip(t *testing.T) {
 	cases := [][]uint16{
 		utf16.Encode([]rune("hello.txt")),
 		utf16.Encode([]rune("Évènement – 日本語 😀")),
-		{0x0041, 0xD800, 0x0042},         // lone high surrogate
-		{0xDC00, 0x0041},                 // lone low surrogate
-		{0xD83D, 0xDE00, 0xD83D},         // pair then lone high at end
+		{0x0041, 0xD800, 0x0042}, // lone high surrogate
+		{0xDC00, 0x0041},         // lone low surrogate
+		{0xD83D, 0xDE00, 0xD83D}, // pair then lone high at end
 		{},
 	}
 	for _, c := range cases {

@@ -55,7 +55,7 @@ func OpenImage(path string) (Raw, error) {
 }
 
 func (r *imageRaw) ReadAt(p []byte, off int64) (int, error) { return r.f.ReadAt(p, off) }
-func (r *imageRaw) Close() error                             { return r.f.Close() }
+func (r *imageRaw) Close() error                            { return r.f.Close() }
 func (r *imageRaw) NTFSInfo() (ntfs.VolumeInfo, error) {
 	b := make([]byte, 512)
 	if _, err := r.f.ReadAt(b, 0); err != nil {
