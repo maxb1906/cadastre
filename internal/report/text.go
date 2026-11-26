@@ -22,9 +22,9 @@ func WriteText(w io.Writer, r *engine.Result, n int, lang string) error {
 	t := ix.Totals()
 	b := func(v uint64) string { return units.Bytes(v, lang) }
 	fmt.Fprintf(w, "%s\n", p.T("summary.title", r.Volume.Root))
-	fmt.Fprintf(w, "  %s : %s   %s : %s\n", p.T("summary.engine"), r.Engine, p.T("summary.time"), units.Duration(r.Duration, lang))
+	fmt.Fprintf(w, "  %s\n", p.T("summary.engine_line", p.T("engine."+r.Engine), units.Duration(r.Duration, lang)))
 	fmt.Fprintf(w, "  %s\n", p.T("summary.files", units.Count(t.Files, lang), units.Count(t.Dirs, lang)))
-	fmt.Fprintf(w, "  %s : %s (%s : %s)\n\n", p.T("summary.total"), b(t.Size), p.T("col.alloc"), b(t.Alloc))
+	fmt.Fprintf(w, "  %s\n\n", p.T("summary.total_line", b(t.Size), b(t.Alloc)))
 	for _, wr := range r.Warnings {
 		fmt.Fprintf(w, "  ! %s\n", p.T(wr.Key, wr.Args...))
 	}

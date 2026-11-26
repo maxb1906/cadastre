@@ -17,6 +17,7 @@ func runScan(ctx context.Context, env *Env, args []string) error {
 	image := fs.String("image", "", i18n.T(env.Lang, "cli.flag.image"))
 	minSize := fs.String("min-size", "0", i18n.T(env.Lang, "cli.flag.minsize"))
 	quiet := fs.Bool("quiet", false, i18n.T(env.Lang, "cli.flag.quiet"))
+	eng := fs.String("engine", "auto", i18n.T(env.Lang, "cli.flag.engine"))
 	pos, err := parseFlags(fs, args)
 	if err != nil {
 		return errUsage
@@ -25,7 +26,7 @@ func runScan(ctx context.Context, env *Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	opt := engine.Options{MinSize: ms}
+	opt := engine.Options{MinSize: ms, Engine: *eng}
 	if !*quiet {
 		opt.Progress = progressPrinter(env)
 	}
@@ -34,7 +35,7 @@ func runScan(ctx context.Context, env *Env, args []string) error {
 	case *image != "":
 		res, err = engine.ScanImage(ctx, *image, opt)
 	case len(pos) == 1:
-		err = fmt.Errorf("%s", i18n.T(env.Lang, "cli.scan.noengine"))
+		res, err = engine.Scan(ctx, pos[0], opt)
 	default:
 		fs.Usage()
 		return errUsage
