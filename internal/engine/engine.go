@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/maxb1906/cadastre/internal/mftscan"
+	"github.com/maxb1906/cadastre/internal/ntfs"
 	"github.com/maxb1906/cadastre/internal/volume"
 )
 
@@ -43,7 +44,15 @@ func ScanImage(ctx context.Context, path string, opt Options) (*Result, error) {
 		return nil, err
 	}
 	vi, _ := raw.NTFSInfo()
-	res.Volume.Total = vi.TotalClusters * uint64(vi.BytesPerCluster)
+	cs := uint64(vi.BytesPerCluster)
+	res.Volume.Total = vi.TotalClusters * cs
+	// No OS to ask for the free space of an image: count the clusters
+	// marked in use in $Bitmap, exactly like NTFS does.
+	if l, err := ntfs.ReadLayout(raw, vi); err == nil {
+		if used, err := ntfs.UsedClusters(raw, l); err == nil && used <= vi.TotalClusters {
+			res.Volume.Free = (vi.TotalClusters - used) * cs
+		}
+	}
 	res.Index.RootPath = `\`
 	return res, nil
 }
