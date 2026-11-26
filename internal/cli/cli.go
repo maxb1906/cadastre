@@ -33,6 +33,7 @@ func commands() []command {
 	return []command{
 		{"scan", "cli.cmd.scan", runScan},
 		{"open", "cli.cmd.open", runOpen},
+		{"clean", "cli.cmd.clean", runClean},
 		{"check", "cli.cmd.check", runCheck},
 		{"version", "cli.cmd.version", runVersion},
 		{"help", "cli.cmd.help", nil},
