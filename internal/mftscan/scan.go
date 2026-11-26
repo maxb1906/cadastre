@@ -61,7 +61,7 @@ func Scan(ctx context.Context, r io.ReaderAt, vi ntfs.VolumeInfo, opt Options) (
 
 	ix := index.New(int(layout.RecordCount))
 	ix.Root = ntfs.RecRoot
-	b := &builder{ix: ix, parentSeq: make([]uint16, layout.RecordCount), minSize: opt.MinSize, recSize: recSize}
+	b := &builder{ix: ix, parentSeq: make([]uint16, layout.RecordCount), minSize: opt.MinSize, recSize: recSize, clusterSize: vi.BytesPerCluster}
 	sr := ntfs.NewStreamReader(r, layout.Runs, vi.BytesPerCluster, layout.MFTSize())
 
 	workers := opt.Workers

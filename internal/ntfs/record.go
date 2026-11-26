@@ -125,7 +125,10 @@ type Record struct {
 	Names   []FileName
 	Streams []Stream
 
-	IndexAlloc uint64 // allocated bytes of $INDEX_ALLOCATION ($I30), first segment
+	// ExtraAlloc is the space allocated to non-resident attributes other
+	// than $DATA: directory indexes and their bitmaps, view indexes of
+	// metafiles, large security descriptors, attribute lists...
+	ExtraAlloc uint64
 
 	HasReparse bool
 	ReparseTag uint32
@@ -147,8 +150,8 @@ type Record struct {
 type ParseOptions struct {
 	WantAttrList bool
 	WantDataRuns bool
-	// ClusterSize is used to report resident or bogus sizes consistently; if
-	// zero, allocated sizes are taken as is.
+	// ClusterSize enables computing the allocation of unflagged sparse
+	// attributes from their runlist; if zero, header sizes are taken as is.
 	ClusterSize uint32
 }
 
@@ -329,11 +332,52 @@ func decodeAttrHeader(a []byte) (h attrHeader, err error) {
 // allocatedBytes returns the space really used on disk by a non-resident
 // attribute: the "compressed size" field for compressed or sparse
 // attributes (which excludes holes), the allocated size otherwise.
-func (h *attrHeader) allocatedBytes() uint64 {
+//
+// Some attributes have holes without being flagged sparse ($BadClus:$Bad
+// spans the whole volume). When the segment describes the whole attribute,
+// the clusters really mapped by its runlist are counted instead.
+func (h *attrHeader) allocatedBytes(clusterSize uint32) uint64 {
 	if h.hasCompressed {
 		return h.compressed
 	}
-	return h.allocated
+	if clusterSize == 0 || h.lowestVCN != 0 || h.allocated == 0 {
+		return h.allocated
+	}
+	cs := uint64(clusterSize)
+	if h.highestVCN+1 != h.allocated/cs {
+		return h.allocated // runlist continues in other segments
+	}
+	mapped, ok := mappedClusters(h.runs)
+	if !ok || mapped*cs > h.allocated {
+		return h.allocated
+	}
+	return mapped * cs
+}
+
+// mappedClusters sums the lengths of the non-sparse runs of a mapping pairs
+// array without allocating.
+func mappedClusters(b []byte) (uint64, bool) {
+	var total uint64
+	for i := 0; i < len(b); {
+		h := b[i]
+		if h == 0 {
+			return total, true
+		}
+		lenSize, offSize := int(h&0x0F), int(h>>4)
+		i++
+		if lenSize == 0 || lenSize > 8 || offSize > 8 || i+lenSize+offSize > len(b) {
+			return 0, false
+		}
+		var length uint64
+		for k := lenSize - 1; k >= 0; k-- {
+			length = length<<8 | uint64(b[i+k])
+		}
+		i += lenSize + offSize
+		if offSize > 0 {
+			total += length
+		}
+	}
+	return total, true
 }
 
 func (r *Record) parseAttribute(typ uint32, a []byte, opt ParseOptions) error {
@@ -342,6 +386,9 @@ func (r *Record) parseAttribute(typ uint32, a []byte, opt ParseOptions) error {
 		return err
 	}
 	le := binary.LittleEndian
+	if h.nonResident && typ != AttrData && h.lowestVCN == 0 {
+		r.ExtraAlloc += h.allocatedBytes(opt.ClusterSize)
+	}
 	switch typ {
 	case AttrStandardInformation:
 		if h.nonResident || len(h.value) < 0x24 {
@@ -390,7 +437,7 @@ func (r *Record) parseAttribute(typ uint32, a []byte, opt ParseOptions) error {
 		s := Stream{Flags: h.flags, Resident: !h.nonResident}
 		if h.nonResident {
 			s.Size = h.real
-			s.Alloc = h.allocatedBytes()
+			s.Alloc = h.allocatedBytes(opt.ClusterSize)
 		} else {
 			s.Size = uint64(len(h.value))
 		}
@@ -400,11 +447,6 @@ func (r *Record) parseAttribute(typ uint32, a []byte, opt ParseOptions) error {
 			s.nameOff, s.nameLen = uint32(off), uint32(len(r.NameBuf)-off)
 		}
 		r.Streams = append(r.Streams, s)
-
-	case AttrIndexAllocation:
-		if h.nonResident && h.lowestVCN == 0 {
-			r.IndexAlloc += h.allocatedBytes()
-		}
 
 	case AttrReparsePoint:
 		r.HasReparse = true

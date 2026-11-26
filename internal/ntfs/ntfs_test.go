@@ -124,7 +124,7 @@ func TestParseDirectoryReparseAndContinuation(t *testing.T) {
 	if err := ntfs.Parse(r, 40, &rec, ntfs.ParseOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if !rec.IsDir() || !rec.HasReparse || rec.ReparseTag != ntfs.ReparseTagMountPoint || rec.IndexAlloc != 8192 {
+	if !rec.IsDir() || !rec.HasReparse || rec.ReparseTag != ntfs.ReparseTagMountPoint || rec.ExtraAlloc != 8192 {
 		t.Fatalf("%+v", rec)
 	}
 	// Extension record holding a continuation segment of $DATA: no sizes.

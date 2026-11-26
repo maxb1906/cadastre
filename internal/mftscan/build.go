@@ -25,7 +25,7 @@ type extPart struct {
 	ads        []index.Stream
 	wofAlloc   uint64
 	hasWof     bool
-	indexAlloc uint64
+	extraAlloc uint64
 	reparseTag uint32
 	hasReparse bool
 }
@@ -73,10 +73,11 @@ func (c *chunkResult) reset(first, count uint64) {
 // builder holds the state shared by the workers. Workers write the dense
 // arrays of the index at their record numbers only (disjoint ranges).
 type builder struct {
-	ix        *index.Index
-	parentSeq []uint16 // temporary: sequence number expected for the parent
-	minSize   uint64
-	recSize   int
+	ix          *index.Index
+	parentSeq   []uint16 // temporary: sequence number expected for the parent
+	minSize     uint64
+	recSize     int
+	clusterSize uint32
 }
 
 // processChunk parses count records stored back to back in buf, the first
@@ -86,7 +87,7 @@ func (b *builder) processChunk(buf []byte, first uint64, count int, rec *ntfs.Re
 	for k := 0; k < count; k++ {
 		recNo := first + uint64(k)
 		raw := buf[k*b.recSize : (k+1)*b.recSize]
-		err := ntfs.Parse(raw, recNo, rec, ntfs.ParseOptions{})
+		err := ntfs.Parse(raw, recNo, rec, ntfs.ParseOptions{ClusterSize: b.clusterSize})
 		if err != nil {
 			if !errors.Is(err, ntfs.ErrNotInUse) {
 				out.bad++
@@ -155,8 +156,14 @@ func (b *builder) applyBase(rec *ntfs.Record, out *chunkResult) {
 		attr |= index.FlagADS
 		out.ads[i] = ads
 	}
-	if rec.IsDir() && rec.IndexAlloc > 0 {
-		out.dirAlloc[i] = rec.IndexAlloc
+	if rec.ExtraAlloc > 0 {
+		if rec.IsDir() {
+			out.dirAlloc[i] = rec.ExtraAlloc
+		} else {
+			// View indexes of metafiles ($Secure:$SII/$SDH, $ObjId:$O...),
+			// large security descriptors, attribute lists.
+			alloc += rec.ExtraAlloc
+		}
 	}
 
 	// Names: primary name, then additional hard links.
@@ -210,7 +217,7 @@ func (b *builder) collectExtension(rec *ntfs.Record, out *chunkResult) {
 	if rec.BaseRec >= ntfs.MaxRecordNumber {
 		return
 	}
-	p := extPart{base: uint32(rec.BaseRec), baseSeq: rec.BaseSeq, indexAlloc: rec.IndexAlloc,
+	p := extPart{base: uint32(rec.BaseRec), baseSeq: rec.BaseSeq, extraAlloc: rec.ExtraAlloc,
 		hasReparse: rec.HasReparse, reparseTag: rec.ReparseTag}
 	for _, n := range rec.Names {
 		p.names = append(p.names, nameRef{parent: uint32(min(n.ParentRec, ntfs.MaxRecordNumber)), parentSeq: n.ParentSeq, ns: n.Namespace, name: string(rec.Name(n))})
@@ -228,7 +235,7 @@ func (b *builder) collectExtension(rec *ntfs.Record, out *chunkResult) {
 			p.ads = append(p.ads, index.Stream{Name: string(name), Size: s.Size, Alloc: s.Alloc})
 		}
 	}
-	if len(p.names) > 0 || p.main != nil || len(p.ads) > 0 || p.hasWof || p.indexAlloc > 0 || p.hasReparse {
+	if len(p.names) > 0 || p.main != nil || len(p.ads) > 0 || p.hasWof || p.extraAlloc > 0 || p.hasReparse {
 		out.exts = append(out.exts, p)
 	}
 }
@@ -297,8 +304,12 @@ func (b *builder) applyExtensions(parts []extPart, dosOnly map[uint32]bool) {
 			ix.ADS[i] = append(ix.ADS[i], p.ads...)
 			ix.Attr[i] |= index.FlagADS
 		}
-		if p.indexAlloc > 0 {
-			ix.DirOwnAlloc[i] += p.indexAlloc
+		if p.extraAlloc > 0 {
+			if ix.Attr[i]&index.FlagDir != 0 {
+				ix.DirOwnAlloc[i] += p.extraAlloc
+			} else {
+				ix.Alloc[i] += p.extraAlloc
+			}
 		}
 		if p.hasReparse {
 			ix.Attr[i] |= index.AttrReparsePoint
