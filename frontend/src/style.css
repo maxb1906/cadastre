@@ -155,3 +155,30 @@ select { font: inherit; background: var(--panel2); color: var(--text); border: 1
 .modal details { padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .modal summary { cursor: pointer; }
 .modal .tbl td.path { word-break: break-all; }
+
+/* "To clean" panel: groups by action, checkboxes, fixed footer */
+.panel-foot { border-top: 1px solid var(--line); padding: 10px; background: var(--panel2); display: flex; flex-direction: column; gap: 6px; }
+.panel-foot[hidden] { display: none; }
+.panel-foot .btn.primary { width: 100%; padding: 8px 12px; font-weight: 600; }
+.foot-sum { display: flex; align-items: center; gap: 8px; }
+.foot-notes .warn { color: var(--warn); }
+.foot-notes:empty { display: none; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex: none; }
+.seg-btn { background: none; border: 0; padding: 3px 10px; cursor: pointer; color: var(--muted); font-size: 12px; }
+.seg-btn.active { background: var(--accent); color: #fff; }
+.group { margin-bottom: 14px; }
+.g-head { display: flex; align-items: center; gap: 8px; padding: 6px 4px; margin: 0 -10px 6px; padding-inline: 14px; position: sticky; top: -10px; z-index: 1; background: var(--panel); border-bottom: 1px solid var(--line); }
+.g-pad { width: 13px; flex: none; }
+.g-ico { flex: none; width: 16px; text-align: center; }
+.g-title { flex: 1; min-width: 0; }
+.group input[type=checkbox] { flex: none; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.finding.checked { border-color: var(--accent); }
+.g-info .finding { opacity: .8; }
+.f-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
+.chip { font-size: 10px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+.chev { color: var(--muted); flex: none; transition: transform .15s; }
+.finding.open .chev { transform: rotate(90deg); }
+.g-manual .sel-row .num { flex: none; }
+.stat-sec { margin-bottom: 12px; }
+.stat-sec > summary { cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 4px 0; }

@@ -28,7 +28,7 @@ export const state = {
   summary: null as any,
   dir: 0,
   sort: 'alloc',
-  tab: 'ghosts',
+  tab: 'clean',
   selected: null as number | null,
   findings: [] as any[],
   dirAlloc: 0,
@@ -281,10 +281,10 @@ async function showMain(dir: number) {
     h('span', { class: 'tag' }, (lang === 'fr' ? s.duration.toFixed(1).replace('.', ',') : s.duration.toFixed(1)) + ' s'));
 
   const tabs = h('div', { class: 'tabs' });
-  for (const k of ['ghosts', 'space', 'exts', 'top', 'clean']) {
+  if (!['clean', 'space', 'stats'].includes(state.tab)) state.tab = 'clean';
+  for (const k of ['clean', 'space', 'stats']) {
     const b = h('button', { class: 'tab' + (state.tab === k ? ' active' : ''), 'data-tab': k }, t('ui.tab.' + k));
-    if (k === 'ghosts' && state.findings.length) b.append(h('span', { class: 'count' }, String(state.findings.length)));
-    if (k === 'clean') b.append(h('span', { class: 'count', id: 'sel-count' }, ''));
+    if (k === 'clean') b.append(h('span', { class: 'count', id: 'sel-count', title: t('clean.selection') }, ''));
     b.onclick = () => {
       state.tab = k;
       tabs.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x === b));
@@ -319,7 +319,7 @@ async function showMain(dir: number) {
             sortHead('mtime', t('ui.modified'), 'num')),
           h('div', { class: 'list', id: 'list' })),
         h('section', { class: 'center' }, h('div', { id: 'treemap' })),
-        h('section', { class: 'right' }, tabs, h('div', { class: 'panel', id: 'panel' }))),
+        h('section', { class: 'right' }, tabs, h('div', { class: 'panel', id: 'panel' }), h('div', { class: 'panel-foot', id: 'panel-foot' }))),
       h('footer', { class: 'status' },
         h('span', {}, t('ui.mem', count(s.entries), String(s.memoryMb))),
         h('span', { class: 'muted' }, s.admin ? t('rep.admin') : t('rep.noadmin')))));
@@ -444,72 +444,29 @@ function renderRow(it: Item): HTMLElement {
 
 export function renderPanel() {
   const panel = document.getElementById('panel');
-  if (!panel) return;
+  const foot = document.getElementById('panel-foot');
+  if (!panel || !foot) return;
+  const top = state.tab === lastTab ? panel.scrollTop : 0;
+  lastTab = state.tab;
   panel.replaceChildren();
+  foot.replaceChildren();
   switch (state.tab) {
-    case 'ghosts':
-      return ghostsPanel(panel);
-    case 'space':
-      return spacePanel(panel);
-    case 'exts':
-      return extsPanel(panel);
-    case 'top':
-      return topPanel(panel);
     case 'clean':
-      return cleanPanel(panel);
+      cleanPanel(panel, foot);
+      break;
+    case 'space':
+      spacePanel(panel);
+      break;
+    case 'stats':
+      statsPanel(panel);
+      break;
   }
+  // Re-rendering after a checkbox must not jump back to the top.
+  panel.scrollTop = top;
+  foot.hidden = !foot.childElementCount;
 }
 
-function riskDot(risk: string) {
-  return h('span', { class: 'risk ' + risk, title: t('risk.' + risk) });
-}
-
-function ghostsPanel(panel: HTMLElement) {
-  if (!state.findings.length) {
-    panel.append(h('p', { class: 'muted' }, t('ui.no_ghosts')));
-    return;
-  }
-  for (const f of state.findings) {
-    const card = h('div', { class: 'finding' });
-    const head = h('div', { class: 'f-head' },
-      riskDot(f.risk),
-      h('div', { class: 'f-title' }, h('b', {}, f.title), h('div', { class: 'muted small' }, t('risk.' + f.risk) + ' · ' + count(f.files) + ' ' + t('ui.files').toLowerCase())),
-      h('div', { class: 'f-size' }, bytes(f.alloc)));
-    const body = h('div', { class: 'f-body' },
-      h('div', { class: 'advice' }, f.advice),
-      h('div', { class: 'small' }, f.deletable ? '🧹 ' + t('rep.clean.delete') : f.clean === 'official' ? '⚙ ' + t('rep.clean.official', f.official) : 'ℹ ' + t('rep.clean.none')));
-    if (f.groups?.length) {
-      body.append(h('div', { class: 'groups' }, ...f.groups.map((g: any) => h('div', { class: 'small' }, (g.ghost ? '⚠ ' : '') + g.label + ' — ' + bytes(g.alloc)))));
-    }
-    const actions = h('div', { class: 'f-actions' });
-    if (f.deletable || f.clean === 'official') {
-      const sel = h('button', { class: 'btn tiny' }, '＋ ' + t('clean.add_rule'));
-      sel.onclick = (e) => {
-        e.stopPropagation();
-        addToSelection(undefined, f.id);
-      };
-      actions.append(sel);
-    }
-    body.append(actions);
-    const items = h('div', { class: 'f-items' });
-    body.append(items);
-    head.onclick = async () => {
-      card.classList.toggle('open');
-      if (card.classList.contains('open') && !items.childElementCount) {
-        const rows: any[] = (await App.GetFindingItems(f.id, 0, 300)) ?? [];
-        for (const it of rows) {
-          const r = h('div', { class: 'f-item', title: it.name }, h('span', { class: 'path' }, it.name), h('span', { class: 'num' }, bytes(it.alloc)));
-          r.onclick = async () => navigate(it.dir ? it.id : await App.Locate(it.id), it.id);
-          r.oncontextmenu = (e) => contextMenu(e, it.id, it.dir);
-          items.append(r);
-        }
-        if (f.files > rows.length && rows.length >= 300) items.append(h('div', { class: 'muted small' }, t('ui.more_items', f.files - rows.length)));
-      }
-    };
-    card.append(head, body);
-    panel.append(card);
-  }
-}
+let lastTab = '';
 
 function spacePanel(panel: HTMLElement) {
   const rc = state.summary.recon;
@@ -539,8 +496,32 @@ function spacePanel(panel: HTMLElement) {
   for (const n of rc.notes ?? []) panel.append(h('div', { class: 'note' }, t(n)));
 }
 
-async function extsPanel(panel: HTMLElement) {
-  const exts: any[] = (await App.GetExtensions(200)) ?? [];
+function statsPanel(panel: HTMLElement) {
+  const section = (title: string, fill: (box: HTMLElement) => Promise<void>) => {
+    const box = h('div', {});
+    const d = h('details', { class: 'stat-sec', open: '' }, h('summary', {}, title), box);
+    panel.append(d);
+    fill(box).catch((e) => toast(errorMsg(e), 'error'));
+  };
+  section(t('ui.stats.top'), topFiles);
+  section(t('ui.stats.exts'), extensions);
+}
+
+async function topFiles(box: HTMLElement) {
+  const files: Item[] = (await App.GetTopFiles(50)) ?? [];
+  for (const f of files) {
+    const r = h('div', { class: 'f-item', title: f.name },
+      h('span', { class: 'dot', style: `background:${famColor(f)}` }),
+      h('span', { class: 'path' }, f.name),
+      h('span', { class: 'num' }, bytes(f.alloc)));
+    r.onclick = async () => navigate(await App.Locate(f.id), f.id);
+    r.oncontextmenu = (e) => contextMenu(e, f.id, false);
+    box.append(r);
+  }
+}
+
+async function extensions(box: HTMLElement) {
+  const exts: any[] = (await App.GetExtensions(50)) ?? [];
   const total = state.summary.totals.Alloc;
   const table = h('table', { class: 'tbl' }, h('tr', {}, h('th', {}, t('col.ext')), h('th', { class: 'num' }, t('ui.alloc')), h('th', { class: 'num' }, t('ui.files')), h('th', { class: 'num' }, '%')));
   for (const e of exts) {
@@ -551,20 +532,7 @@ async function extsPanel(panel: HTMLElement) {
       h('td', { class: 'num muted' }, count(e.Files)),
       h('td', { class: 'num muted' }, pct(e.Alloc, total))));
   }
-  panel.append(table);
-}
-
-async function topPanel(panel: HTMLElement) {
-  const files: Item[] = (await App.GetTopFiles(100)) ?? [];
-  for (const f of files) {
-    const r = h('div', { class: 'f-item', title: f.name },
-      h('span', { class: 'dot', style: `background:${famColor(f)}` }),
-      h('span', { class: 'path' }, f.name),
-      h('span', { class: 'num' }, bytes(f.alloc)));
-    r.onclick = async () => navigate(await App.Locate(f.id), f.id);
-    r.oncontextmenu = (e) => contextMenu(e, f.id, false);
-    panel.append(r);
-  }
+  box.append(table);
 }
 
 // ---- Boot -----------------------------------------------------------------------
