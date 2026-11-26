@@ -63,7 +63,18 @@ type OfficialView struct {
 	Targets      []string `json:"targets"`
 }
 
-// PlanView is the dry-run screen.
+// ActionView is one concrete action of the confirmation screen: the files
+// of a rule deleted by Cadastre, or a rule's official action.
+type ActionView struct {
+	clean.Action
+	Title        string   `json:"title"`
+	Official     string   `json:"official,omitempty"` // official action title
+	Commands     []string `json:"commands,omitempty"`
+	Targets      []string `json:"targets,omitempty"`
+	RestorePoint bool     `json:"restorePoint,omitempty"`
+}
+
+// PlanView is the confirmation screen (the mandatory dry-run).
 type PlanView struct {
 	ID           string         `json:"id"`
 	Mode         string         `json:"mode"`
@@ -75,6 +86,7 @@ type PlanView struct {
 	MoreItems    int            `json:"moreItems"`
 	Skipped      []SkipGroup    `json:"skipped"`
 	Official     []OfficialView `json:"official"`
+	Actions      []ActionView   `json:"actions"`
 	RestorePoint bool           `json:"restorePoint"`
 }
 
@@ -135,6 +147,20 @@ func (a *App) PlanClean(req CleanRequest) (*PlanView, error) {
 		}
 		v.RestorePoint = v.RestorePoint || o.RestorePoint
 		v.Official = append(v.Official, ov)
+	}
+	for _, ac := range p.Actions() {
+		av := ActionView{Action: ac, Title: i18n.T(a.lang, "clean.group.manual")}
+		if r, ok := cur.Catalog.Get(ac.Rule); ok {
+			av.Title = r.Title.In(a.lang)
+		}
+		if ac.Kind == clean.ActionOfficial {
+			for _, ov := range v.Official {
+				if ov.Rule == ac.Rule {
+					av.Official, av.Commands, av.Targets, av.RestorePoint = ov.Title, ov.Commands, ov.Targets, ov.RestorePoint
+				}
+			}
+		}
+		v.Actions = append(v.Actions, av)
 	}
 	return v, nil
 }

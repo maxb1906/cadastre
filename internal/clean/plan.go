@@ -412,6 +412,51 @@ func (b *builder) addOfficial(r *rules.Rule, f *rules.Finding, sel Selection) {
 	b.p.Official = append(b.p.Official, o)
 }
 
+// Action kinds of a plan summary.
+const (
+	ActionDelete   = "delete"   // Cadastre deletes the files itself
+	ActionOfficial = "official" // the rule's official action (commands, then its items)
+)
+
+// Action sums up what a plan does for one rule ("" for the manual selection).
+type Action struct {
+	Rule  string `json:"rule"`
+	Kind  string `json:"kind"`
+	Risk  string `json:"risk"`
+	Files int    `json:"files"` // files deleted (folders left out)
+	Bytes uint64 `json:"bytes"` // space expected to be freed
+}
+
+// Actions lists every concrete action of the plan, one per rule: direct
+// deletions first, then official actions. Their bytes add up to p.Bytes, so
+// an interface can show where each byte of the total comes from.
+func (p *Plan) Actions() []Action {
+	var out []Action
+	at := map[string]int{}
+	for _, it := range p.Items {
+		k, ok := at[it.Rule]
+		if !ok {
+			k = len(out)
+			at[it.Rule] = k
+			out = append(out, Action{Rule: it.Rule, Kind: ActionDelete, Risk: it.Risk})
+		}
+		if !it.Dir {
+			out[k].Files++
+			out[k].Bytes += it.Alloc
+		}
+	}
+	for _, o := range p.Official {
+		a := Action{Rule: o.Rule, Kind: ActionOfficial, Risk: o.Risk, Bytes: o.Alloc}
+		for _, it := range o.Items {
+			if !it.Dir {
+				a.Files++
+			}
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // finish orders the items (files before folders, deepest folders first) and
 // computes the totals.
 func (b *builder) finish() {

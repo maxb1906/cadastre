@@ -67,8 +67,8 @@ Get-Content "$env:ProgramData\Cadastre\journal\$(Get-Date -f yyyy-MM-dd).jsonl" 
 ```
 
 Dans la GUI (relevé de `T:`) :
-1. Onglet **À nettoyer** : cocher une règle 🟢, choisir Corbeille, *Simuler le nettoyage* → confirmer → Lancer. Vérifier la Corbeille Windows et le journal.
-2. Carte **Récupérable** : un clic coche exactement les règles qui composent le chiffre (le total du pied doit être égal à la carte) et ouvre la simulation. En mode Corbeille, les temporaires sont écartés et un bandeau propose *Simuler en mode définitif* : vérifier que la nouvelle simulation les inclut.
+1. Onglet **À nettoyer** : cocher une règle 🟢, choisir Corbeille, *Nettoyage* → l'écran liste chaque action concrète → *Supprimer maintenant*. Vérifier la Corbeille Windows et le journal.
+2. Carte **Récupérable** : un clic coche exactement les règles qui composent le chiffre (le total du pied doit être égal à la carte) et ouvre l'écran de nettoyage. Chaque octet du total doit y apparaître dans une ligne d'action : fichiers supprimés par Cadastre, ou action officielle (ex. `powercfg /h off` pour `hiberfil.sys`) avec ses commandes. Sans la case orange, les actions orange sont grisées et le total le dit. En mode Corbeille, les temporaires sont écartés et un bandeau propose *Passer en mode définitif* : vérifier qu'ils sont alors inclus.
 3. Sans cocher la confirmation orange, lancer : seuls les éléments 🟢 sont supprimés, les 🟠 apparaissent « ignorés » dans le résultat et le journal.
 
 Actions officielles (sur C:, avec prudence) :

@@ -118,6 +118,36 @@ export namespace index {
 
 export namespace main {
 	
+	export class ActionView {
+	    rule: string;
+	    kind: string;
+	    risk: string;
+	    files: number;
+	    bytes: number;
+	    title: string;
+	    official?: string;
+	    commands?: string[];
+	    targets?: string[];
+	    restorePoint?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActionView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rule = source["rule"];
+	        this.kind = source["kind"];
+	        this.risk = source["risk"];
+	        this.files = source["files"];
+	        this.bytes = source["bytes"];
+	        this.title = source["title"];
+	        this.official = source["official"];
+	        this.commands = source["commands"];
+	        this.targets = source["targets"];
+	        this.restorePoint = source["restorePoint"];
+	    }
+	}
 	export class CleanRequest {
 	    rules: string[];
 	    entries: number[];
@@ -215,6 +245,7 @@ export namespace main {
 	    moreItems: number;
 	    skipped: SkipGroup[];
 	    official: OfficialView[];
+	    actions: ActionView[];
 	    restorePoint: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -233,6 +264,7 @@ export namespace main {
 	        this.moreItems = source["moreItems"];
 	        this.skipped = this.convertValues(source["skipped"], SkipGroup);
 	        this.official = this.convertValues(source["official"], OfficialView);
+	        this.actions = this.convertValues(source["actions"], ActionView);
 	        this.restorePoint = source["restorePoint"];
 	    }
 	

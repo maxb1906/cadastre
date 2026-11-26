@@ -337,3 +337,39 @@ func TestPlaceholdersAndScript(t *testing.T) {
 		t.Error("script without BOM")
 	}
 }
+
+// The actions of a plan account for every byte of its total, official
+// actions included (they hold no item in p.Items).
+func TestPlanActions(t *testing.T) {
+	v := newVolume(t)
+	a := analyze(t, v.root)
+	ix := a.Result.Index
+	film, ok := ix.Find("Users/bob/Videos/film.mp4")
+	if !ok {
+		t.Fatal("film.mp4 not indexed")
+	}
+	p := Build(a, Selection{Rules: []string{"memory-dumps", "node-modules", "component-store"}, Entries: []uint32{film}, Official: true, Mode: ModePermanent}, Env{Admin: true})
+	check := func(stage string) {
+		var sum uint64
+		kinds := map[string]Action{}
+		for _, ac := range p.Actions() {
+			sum += ac.Bytes
+			kinds[ac.Rule] = ac
+		}
+		if sum != p.Bytes {
+			t.Errorf("%s: actions sum %d, plan bytes %d", stage, sum, p.Bytes)
+		}
+		if ac := kinds["component-store"]; ac.Kind != ActionOfficial || ac.Bytes == 0 || ac.Files != 0 {
+			t.Errorf("%s: WinSxS action %+v", stage, ac)
+		}
+		if ac := kinds["node-modules"]; ac.Kind != ActionDelete || ac.Files != 2 {
+			t.Errorf("%s: node_modules action %+v", stage, ac)
+		}
+		if ac := kinds[""]; ac.Kind != ActionDelete || ac.Files != 1 || ac.Bytes == 0 {
+			t.Errorf("%s: manual action %+v", stage, ac)
+		}
+	}
+	check("build")
+	Prepare(p, OSFS{})
+	check("prepare")
+}

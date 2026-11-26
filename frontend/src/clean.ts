@@ -234,7 +234,7 @@ function footer(foot: HTMLElement) {
     };
     seg.append(b);
   }
-  const sim = h('button', { class: 'btn primary' }, '🔍 ' + t('clean.simulate')) as HTMLButtonElement;
+  const sim = h('button', { class: 'btn primary' }, '🧹 ' + t('clean.simulate')) as HTMLButtonElement;
   sim.disabled = n === 0;
   sim.onclick = () => simulate([...sel.rules], [...sel.entries.keys()]);
   const notes = h('div', { class: 'foot-notes' });
@@ -272,81 +272,53 @@ async function simulate(rules: string[], entries: number[], mode = sel.mode) {
   });
 }
 
+// showPlan is the confirmation screen: every concrete action (files deleted
+// by Cadastre, official actions with their commands), what is left out and
+// why, then one button that really deletes. Behind it, the plan has just
+// been checked item by item on the disk (the mandatory dry-run).
 function showPlan(plan: any, resimPermanent: () => void) {
   const overlay = h('div', { class: 'overlay' });
-  const modal = h('div', { class: 'modal' });
+  const modal = h('div', { class: 'modal confirm' });
   overlay.append(modal);
   const close = () => overlay.remove();
-  const hasWork = plan.files > 0 || (plan.official?.length ?? 0) > 0 || plan.items?.length > 0;
+  const actions: any[] = plan.actions ?? [];
+  const items: any[] = plan.items ?? [];
 
-  const tabs = h('div', { class: 'tabs' });
-  const body = h('div', { class: 'scroll' });
-  const views: Record<string, () => HTMLElement> = {
-    files: () => {
-      const tbl = h('table', { class: 'tbl' });
-      for (const it of plan.items ?? []) {
-        tbl.append(h('tr', {},
-          h('td', {}, h('span', { class: 'risk ' + it.risk })),
-          h('td', { class: 'path' }, it.path + (it.reparse ? '  ↪' : '')),
-          h('td', { class: 'num' }, bytes(it.alloc))));
-      }
-      if (plan.moreItems) tbl.append(h('tr', {}, h('td', { colspan: '3', class: 'muted' }, t('clean.more', plan.moreItems))));
-      return tbl;
-    },
-    skipped: () => {
-      const box = h('div', {});
-      for (const g of plan.skipped ?? []) {
-        const d = h('details', {}, h('summary', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`));
-        for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
-        box.append(d);
-      }
-      return box;
-    },
-    official: () => {
-      const box = h('div', {});
-      for (const o of plan.official ?? []) {
-        box.append(h('div', { class: 'finding open' },
-          h('div', { class: 'f-head' }, h('span', { class: 'risk ' + o.risk }), h('div', { class: 'f-title' }, h('b', {}, o.title), h('div', { class: 'muted small' }, o.rule)), h('div', { class: 'f-size' }, bytes(o.alloc))),
-          h('div', { class: 'f-body' }, h('div', { class: 'small muted' }, t('clean.commands')), ...o.commands.map((c: string) => h('div', { class: 'path' }, '> ' + c)))));
-      }
-      return box;
-    },
-  };
-  const tabDefs: [string, string][] = [['files', t('clean.files_tab') + ` (${count(plan.items?.length ?? 0)})`]];
-  if (plan.skipped?.length) tabDefs.push(['skipped', t('clean.skipped_tab') + ` (${count(plan.skipped.reduce((a: number, g: any) => a + g.count, 0))})`]);
-  if (plan.official?.length) tabDefs.push(['official', t('clean.official_tab') + ` (${plan.official.length})`]);
-  const show = (k: string) => {
-    tabs.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', (x as HTMLElement).dataset.tab === k));
-    body.replaceChildren(views[k]());
-  };
-  for (const [k, label] of tabDefs) {
-    const b = h('button', { class: 'tab', 'data-tab': k }, label);
-    b.onclick = () => show(k);
-    tabs.append(b);
-  }
-
-  // Items left out only because the recycle bin makes no sense there: offer
-  // to simulate again in permanent mode rather than leave the user guessing.
-  const permNote = () => {
-    const g = (plan.skipped ?? []).find((x: any) => x.reason === 'need_permanent');
-    if (!g || plan.mode !== 'recycle') return '';
-    const b = h('button', { class: 'btn tiny' }, t('clean.resim_permanent'));
-    b.onclick = () => {
-      close();
-      resimPermanent();
-    };
-    return h('div', { class: 'note' }, t('clean.need_permanent_note', count(g.count), bytes(g.alloc)), ' ', b);
-  };
   const orange = h('input', { type: 'checkbox' }) as HTMLInputElement;
   const restore = h('input', { type: 'checkbox' }) as HTMLInputElement;
   restore.checked = true;
-  const run = h('button', { class: 'btn danger' }, '🧹 ' + t('clean.run')) as HTMLButtonElement;
-  // When everything selected is orange, nothing would run without the
-  // explicit confirmation.
-  const allOrange = (plan.items ?? []).every((i: any) => i.risk === 'orange') && (plan.official ?? []).every((o: any) => o.risk === 'orange');
-  const sync = () => (run.disabled = !hasWork || (plan.orange && allOrange && !orange.checked));
-  orange.onchange = sync;
-  sync();
+  const run = h('button', { class: 'btn danger' }) as HTMLButtonElement;
+  const total = h('b', { class: 'big' });
+  const partial = h('div', { class: 'small warn' });
+  const list = h('div', { class: 'actions' });
+
+  // An orange action only runs with the explicit confirmation.
+  const active = (a: any) => a.risk !== 'orange' || orange.checked;
+  const render = () => {
+    list.replaceChildren();
+    for (const a of actions) list.append(actionRow(a, items, active(a)));
+    const skipped = (plan.skipped ?? []) as any[];
+    if (skipped.length) {
+      const n = skipped.reduce((x, g) => x + g.count, 0);
+      const al = skipped.reduce((x, g) => x + g.alloc, 0);
+      const d = h('details', { class: 'action skipped' },
+        h('summary', {}, h('span', { class: 'a-ico' }, '⏭'), h('span', { class: 'a-title' }, h('b', {}, t('clean.skipped_title', count(n))), h('div', { class: 'muted small' }, t('clean.skipped_sub'))), h('span', { class: 'f-size muted' }, bytes(al))));
+      for (const g of skipped) {
+        d.append(h('div', { class: 'small skip-reason' }, h('b', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`)));
+        for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
+      }
+      list.append(d);
+    }
+    const bytesNow = actions.filter(active).reduce((x, a) => x + a.bytes, 0);
+    const doable = actions.filter(active).length;
+    total.textContent = bytes(bytesNow);
+    const all = actions.reduce((x, a) => x + a.bytes, 0);
+    partial.textContent = bytesNow < all ? t('clean.to_free_partial', bytes(all)) : '';
+    run.textContent = '🧹 ' + (doable ? t('clean.run_now', bytes(bytesNow)) : t('clean.run_nothing'));
+    run.disabled = !doable;
+  };
+  orange.onchange = render;
+
   const script = h('button', { class: 'btn' }, '📜 ' + t('clean.script'));
   script.onclick = async () => {
     try {
@@ -367,21 +339,65 @@ function showPlan(plan: any, resimPermanent: () => void) {
       toast(errorMsg(e), 'error');
     }
   };
+  // Items left out only because the recycle bin makes no sense there.
+  const need = (plan.skipped ?? []).find((x: any) => x.reason === 'need_permanent');
+  let permNote: HTMLElement | string = '';
+  if (need && plan.mode === 'recycle') {
+    const b = h('button', { class: 'btn tiny' }, t('clean.resim_permanent'));
+    b.onclick = () => {
+      close();
+      resimPermanent();
+    };
+    permNote = h('div', { class: 'note' }, t('clean.need_permanent_note', count(need.count), bytes(need.alloc)), ' ', b);
+  }
+  const hasOrange = actions.some((a) => a.risk === 'orange');
+  const hasRestore = actions.some((a) => a.restorePoint);
 
   modal.append(
-    h('h2', {}, t('clean.sim_title')),
-    h('p', {}, h('b', {}, t('clean.sim_summary', count(plan.files), bytes(plan.bytes), t('clean.mode.' + plan.mode)))),
-    h('p', { class: 'small muted' }, '✔ ' + t('clean.sim_checked')),
+    h('h2', {}, t('clean.confirm_title')),
+    h('div', { class: 'confirm-head' },
+      h('div', {}, h('div', { class: 'muted small' }, t('clean.to_free')), total, partial),
+      h('div', { class: 'small' }, h('div', {}, t('clean.mode_is', t('clean.mode.' + plan.mode))), h('div', { class: 'muted' }, '✔ ' + t('clean.sim_checked')))),
     plan.fromSnapshot ? h('div', { class: 'note' }, t('clean.snapshot_note')) : '',
-    permNote(),
-    tabs, body,
+    permNote,
+    actions.length ? '' : h('div', { class: 'note' }, t('clean.nothing_doable')),
+    h('div', { class: 'scroll' }, list),
     h('div', { class: 'foot' },
-      plan.orange ? h('label', { class: 'opt warnbox' }, orange, ' ' + t('clean.confirm_orange')) : '',
-      plan.restorePoint ? h('label', { class: 'opt' }, restore, ' ' + t('clean.restore_point')) : '',
+      hasOrange ? h('label', { class: 'opt warnbox' }, orange, ' ' + t('clean.confirm_orange')) : '',
+      hasRestore ? h('label', { class: 'opt' }, restore, ' ' + t('clean.restore_point')) : '',
       h('span', { class: 'spacer' }), script, cancel, run));
+  render();
   document.body.append(overlay);
-  show('files');
-  if (!hasWork) toast(t('clean.no_items'));
+}
+
+function actionRow(a: any, items: any[], active: boolean): HTMLElement {
+  const official = a.kind === 'official';
+  let what: string;
+  if (official) what = '⚙ ' + t('clean.action.official', a.official) + (a.files ? ' · ' + t('clean.action.files', count(a.files)) : '');
+  else what = t('clean.action.delete', count(a.files));
+  const head = h('summary', {},
+    h('span', { class: 'risk ' + a.risk, title: t('risk.' + a.risk) }),
+    h('span', { class: 'a-title' }, h('b', {}, a.title), h('div', { class: 'small' }, what),
+      active ? '' : h('div', { class: 'small warn' }, t('clean.action.needs_orange'))),
+    h('span', { class: 'f-size' }, bytes(a.bytes)));
+  const d = h('details', { class: 'action' + (active ? '' : ' off') }, head);
+  if (official) {
+    d.append(h('div', { class: 'small muted' }, t('clean.commands')));
+    for (const c of a.commands ?? []) d.append(h('div', { class: 'path cmd' }, '> ' + c));
+    if (a.targets?.length) {
+      d.append(h('div', { class: 'small muted' }, t('clean.action.targets')));
+      for (const p of a.targets.slice(0, 50)) d.append(h('div', { class: 'path small' }, p));
+    }
+  } else {
+    const mine = items.filter((it) => (it.rule ?? '') === a.rule);
+    const tbl = h('table', { class: 'tbl' });
+    for (const it of mine.slice(0, 500)) {
+      tbl.append(h('tr', {}, h('td', { class: 'path' }, it.path + (it.reparse ? '  ↪' : '')), h('td', { class: 'num' }, bytes(it.alloc))));
+    }
+    if (a.files > mine.length || mine.length > 500) tbl.append(h('tr', {}, h('td', { colspan: '2', class: 'muted' }, t('clean.more', a.files - Math.min(mine.length, 500)))));
+    d.append(tbl);
+  }
+  return d;
 }
 
 let runOverlay: HTMLElement | null = null;
