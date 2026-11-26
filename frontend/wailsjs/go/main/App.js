@@ -14,6 +14,10 @@ export function ExecuteClean(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExecuteClean'](arg1, arg2, arg3);
 }
 
+export function ExecuteMulti(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExecuteMulti'](arg1, arg2, arg3);
+}
+
 export function Export(arg1) {
   return window['go']['main']['App']['Export'](arg1);
 }
@@ -44,6 +48,10 @@ export function GetInfo() {
 
 export function GetItem(arg1) {
   return window['go']['main']['App']['GetItem'](arg1);
+}
+
+export function GetMulti() {
+  return window['go']['main']['App']['GetMulti']();
 }
 
 export function GetSummary() {
@@ -86,6 +94,10 @@ export function PlanClean(arg1) {
   return window['go']['main']['App']['PlanClean'](arg1);
 }
 
+export function PlanMulti(arg1) {
+  return window['go']['main']['App']['PlanMulti'](arg1);
+}
+
 export function Reveal(arg1) {
   return window['go']['main']['App']['Reveal'](arg1);
 }
@@ -100,6 +112,10 @@ export function SaveSnapshot() {
 
 export function SetLang(arg1) {
   return window['go']['main']['App']['SetLang'](arg1);
+}
+
+export function StartMulti(arg1, arg2) {
+  return window['go']['main']['App']['StartMulti'](arg1, arg2);
 }
 
 export function StartScan(arg1, arg2, arg3) {

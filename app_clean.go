@@ -23,6 +23,7 @@ import (
 type cleanState struct {
 	mu      sync.Mutex
 	plans   map[string]*clean.Plan
+	multi   map[string]*multiPlan
 	last    *clean.Result
 	cancel  context.CancelFunc
 	running bool
@@ -97,9 +98,14 @@ func (a *App) PlanClean(req CleanRequest) (*PlanView, error) {
 	if err != nil {
 		return nil, err
 	}
+	return a.planView(cur, clean.Selection{Rules: req.Rules, Entries: req.Entries, Mode: req.Mode, Official: req.Official}), nil
+}
+
+// planView builds, checks on disk and keeps the plan of a selection, and
+// returns its confirmation screen.
+func (a *App) planView(cur *analysis.Analysis, sel clean.Selection) *PlanView {
 	running, _ := sysinfo.RunningProcesses()
-	p := clean.Build(cur, clean.Selection{Rules: req.Rules, Entries: req.Entries, Mode: req.Mode, Official: req.Official},
-		clean.Env{Admin: volume.IsAdmin(), Running: running})
+	p := clean.Build(cur, sel, clean.Env{Admin: volume.IsAdmin(), Running: running})
 	clean.Prepare(p, clean.OSFS{})
 	a.clean.mu.Lock()
 	if a.clean.plans == nil {
@@ -162,7 +168,7 @@ func (a *App) PlanClean(req CleanRequest) (*PlanView, error) {
 		}
 		v.Actions = append(v.Actions, av)
 	}
-	return v, nil
+	return v
 }
 
 func joinArgs(c []string) string {
@@ -185,26 +191,16 @@ func itoa(n int) string {
 func (a *App) ExecuteClean(planID string, confirmOrange, restorePoint bool) error {
 	a.clean.mu.Lock()
 	p := a.clean.plans[planID]
+	a.clean.mu.Unlock()
 	if p == nil {
-		a.clean.mu.Unlock()
 		return errors.New(i18n.T(a.lang, "clean.reason.not_prepared"))
 	}
-	if a.clean.running {
-		a.clean.mu.Unlock()
-		return errors.New(i18n.T(a.lang, "gui.busy"))
+	ctx, err := a.beginClean()
+	if err != nil {
+		return err
 	}
-	ctx, cancel := context.WithCancel(a.ctx)
-	a.clean.cancel = cancel
-	a.clean.running = true
-	a.clean.mu.Unlock()
-
 	go func() {
-		defer cancel()
-		defer func() {
-			a.clean.mu.Lock()
-			a.clean.running = false
-			a.clean.mu.Unlock()
-		}()
+		defer a.endClean()
 		j, err := clean.OpenJournal("")
 		if err != nil {
 			wruntime.EventsEmit(a.ctx, "clean:error", err.Error())
@@ -217,29 +213,13 @@ func (a *App) ExecuteClean(planID string, confirmOrange, restorePoint bool) erro
 			return
 		}
 		freeBefore := cur.Result.Volume.Free
-		var last time.Time
-		r, err := clean.Execute(ctx, p, clean.OSFS{}, j, clean.Options{
-			ConfirmOrange: confirmOrange,
-			RestorePoint:  restorePoint,
-			Running: func() map[string]bool {
-				m, _ := sysinfo.RunningProcesses()
-				return m
-			},
-			Progress: func(pr clean.Progress) {
-				if time.Since(last) > 80*time.Millisecond || pr.Done == pr.Total {
-					last = time.Now()
-					wruntime.EventsEmit(a.ctx, "clean:progress", pr)
-				}
-			},
-		})
+		r, fresh, err := a.runPlan(ctx, p, cur, j, confirmOrange, restorePoint, "")
 		if err != nil {
 			wruntime.EventsEmit(a.ctx, "clean:error", err.Error())
 			return
 		}
-		// Bring the view up to date (removed entries, rescanned zones).
 		a.mu.Lock()
-		a.cur = clean.Refresh(ctx, cur, r, analysis.Options{})
-		freeAfter := a.cur.Result.Volume.Free
+		a.cur = fresh
 		a.mu.Unlock()
 		a.clean.mu.Lock()
 		a.clean.last = r
@@ -247,10 +227,58 @@ func (a *App) ExecuteClean(planID string, confirmOrange, restorePoint bool) erro
 		a.clean.mu.Unlock()
 		wruntime.EventsEmit(a.ctx, "clean:done", map[string]any{
 			"done": r.Done, "failed": r.Failed, "skipped": r.Skipped, "freed": r.Freed, "canceled": r.Canceled,
-			"journal": r.Journal, "freeBefore": freeBefore, "freeAfter": freeAfter, "entries": cli.Summary(r).Entries,
+			"journal": r.Journal, "freeBefore": freeBefore, "freeAfter": fresh.Result.Volume.Free, "entries": cli.Summary(r).Entries,
 		})
 	}()
 	return nil
+}
+
+// beginClean marks a cleanup as running and returns its cancelable context.
+func (a *App) beginClean() (context.Context, error) {
+	a.clean.mu.Lock()
+	defer a.clean.mu.Unlock()
+	if a.clean.running {
+		return nil, errors.New(i18n.T(a.lang, "gui.busy"))
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.clean.cancel = cancel
+	a.clean.running = true
+	return ctx, nil
+}
+
+func (a *App) endClean() {
+	a.clean.mu.Lock()
+	defer a.clean.mu.Unlock()
+	if a.clean.cancel != nil {
+		a.clean.cancel()
+	}
+	a.clean.running = false
+}
+
+// runPlan executes one prepared plan into journal j, emitting
+// "clean:progress" (tagged with root when several volumes are cleaned), and
+// returns the result with the analysis brought up to date (removed entries,
+// rescanned zones).
+func (a *App) runPlan(ctx context.Context, p *clean.Plan, cur *analysis.Analysis, j *clean.Journal, confirmOrange, restorePoint bool, root string) (*clean.Result, *analysis.Analysis, error) {
+	var last time.Time
+	r, err := clean.Execute(ctx, p, clean.OSFS{}, j, clean.Options{
+		ConfirmOrange: confirmOrange,
+		RestorePoint:  restorePoint,
+		Running: func() map[string]bool {
+			m, _ := sysinfo.RunningProcesses()
+			return m
+		},
+		Progress: func(pr clean.Progress) {
+			if time.Since(last) > 80*time.Millisecond || pr.Done == pr.Total {
+				last = time.Now()
+				wruntime.EventsEmit(a.ctx, "clean:progress", map[string]any{"done": pr.Done, "total": pr.Total, "freed": pr.Freed, "path": pr.Path, "root": root})
+			}
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return r, clean.Refresh(ctx, cur, r, analysis.Options{}), nil
 }
 
 // CancelClean stops the cleanup between two items.

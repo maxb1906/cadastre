@@ -124,6 +124,8 @@ export namespace main {
 	    risk: string;
 	    files: number;
 	    bytes: number;
+	    noGain?: boolean;
+	    found?: number;
 	    title: string;
 	    official?: string;
 	    commands?: string[];
@@ -141,6 +143,8 @@ export namespace main {
 	        this.risk = source["risk"];
 	        this.files = source["files"];
 	        this.bytes = source["bytes"];
+	        this.noGain = source["noGain"];
+	        this.found = source["found"];
 	        this.title = source["title"];
 	        this.official = source["official"];
 	        this.commands = source["commands"];
@@ -164,28 +168,6 @@ export namespace main {
 	        this.entries = source["entries"];
 	        this.mode = source["mode"];
 	        this.official = source["official"];
-	    }
-	}
-	export class Info {
-	    version: string;
-	    lang: string;
-	    admin: boolean;
-	    os: string;
-	    catalog: Record<string, string>;
-	    rules: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new Info(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.version = source["version"];
-	        this.lang = source["lang"];
-	        this.admin = source["admin"];
-	        this.os = source["os"];
-	        this.catalog = source["catalog"];
-	        this.rules = source["rules"];
 	    }
 	}
 	export class OfficialView {
@@ -286,6 +268,178 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class DiskPlan {
+	    root: string;
+	    label: string;
+	    plan?: PlanView;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiskPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.root = source["root"];
+	        this.label = source["label"];
+	        this.plan = this.convertValues(source["plan"], PlanView);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DiskSelection {
+	    root: string;
+	    rules: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiskSelection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.root = source["root"];
+	        this.rules = source["rules"];
+	    }
+	}
+	export class DiskView {
+	    root: string;
+	    label: string;
+	    fs: string;
+	    engine: string;
+	    total: number;
+	    free: number;
+	    error?: string;
+	    reclaimable: number;
+	    reclaimPermanentOnly: number;
+	    reclaimAdminOnly: number;
+	    findings: any[];
+	    suggested: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiskView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.root = source["root"];
+	        this.label = source["label"];
+	        this.fs = source["fs"];
+	        this.engine = source["engine"];
+	        this.total = source["total"];
+	        this.free = source["free"];
+	        this.error = source["error"];
+	        this.reclaimable = source["reclaimable"];
+	        this.reclaimPermanentOnly = source["reclaimPermanentOnly"];
+	        this.reclaimAdminOnly = source["reclaimAdminOnly"];
+	        this.findings = source["findings"];
+	        this.suggested = source["suggested"];
+	    }
+	}
+	export class Info {
+	    version: string;
+	    lang: string;
+	    admin: boolean;
+	    os: string;
+	    catalog: Record<string, string>;
+	    rules: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.lang = source["lang"];
+	        this.admin = source["admin"];
+	        this.os = source["os"];
+	        this.catalog = source["catalog"];
+	        this.rules = source["rules"];
+	    }
+	}
+	export class MultiPlanView {
+	    id: string;
+	    mode: string;
+	    disks: DiskPlan[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiPlanView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.mode = source["mode"];
+	        this.disks = this.convertValues(source["disks"], DiskPlan);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MultiRequest {
+	    disks: DiskSelection[];
+	    mode: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MultiRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.disks = this.convertValues(source["disks"], DiskSelection);
+	        this.mode = source["mode"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	
 	export class Summary {
 	    root: string;

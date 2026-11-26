@@ -71,6 +71,22 @@ Dans la GUI (relevé de `T:`) :
 2. Carte **Récupérable** : le chiffre ne compte que ce qu'un nettoyage libère vraiment. `hiberfil.sys` (powercfg), les disques virtuels (Optimize-VHD) et les journaux d'événements (wevtutil) n'y sont plus, et sans droits admin les zones système en sont exclues. Un clic coche les règles qui composent le chiffre et ouvre l'écran de nettoyage. En mode **définitif** avec la case orange cochée, le total de l'écran doit être **égal** au chiffre de la carte. La ligne « dont X en mode définitif uniquement » de la carte correspond à ce qui manque en mode Corbeille. Sans la case orange, les actions orange sont grisées et le total le dit. En mode Corbeille, les temporaires sont écartés et un bandeau propose *Passer en mode définitif* : vérifier qu'ils sont alors inclus.
 3. Sans cocher la confirmation orange, lancer : seuls les éléments 🟢 sont supprimés, les 🟠 apparaissent « ignorés » dans le résultat et le journal.
 
+### Nettoyage multi-disques
+
+GUI, en administrateur : sur l'accueil, cocher `T:` et un second volume (une clé USB ou un VHDX de plus), puis *Nettoyer les disques cochés*.
+1. Les disques sont relevés l'un après l'autre (barre globale, « Disque 1 / 2 »). *Annuler* pendant le relevé ramène à l'accueil.
+2. Écran multi-disques : une carte par disque avec son chiffre réellement récupérable. Les règles vertes avec un gain réel sont cochées d'office. Les règles orange et les actions officielles sont décochées. Les actions sans gain garanti (VHDX, journaux, hiberfil) affichent leur taille en grisé et ne comptent pas dans le total. Un disque illisible affiche « Relevé impossible » sans bloquer les autres.
+3. *Nettoyage* : l'écran de confirmation présente une section par disque, chacune avec son bouton `.ps1`. Le total suit la case orange. *Supprimer maintenant* traite les disques l'un après l'autre, et la progression affiche le disque en cours.
+4. Résultat : une ligne par disque (libéré, espace libre avant → après) et un seul journal. L'écran multi-disques se met à jour. Si l'un des disques était ouvert dans la vue principale, *Nouveau relevé* puis ce disque doit montrer l'état nettoyé.
+
+CLI :
+
+```powershell
+.\cadastre.exe clean --suggested T: U: | Out-Host                       # simulation, une section par volume
+.\cadastre.exe clean --suggested T: U: --permanent --apply | Out-Host   # demande « oui » pour chaque volume
+.\cadastre.exe clean --suggested T: --script $env:TEMP\s.ps1          # un seul volume : pas de suffixe
+```
+
 Actions officielles (sur C:, avec prudence) :
 `cadastre clean C: --rule delivery-optimization --official --apply` lance `Delete-DeliveryOptimizationCache`.
 `--rule component-store --official --restore-point --apply` lance DISM et peut prendre plusieurs minutes.

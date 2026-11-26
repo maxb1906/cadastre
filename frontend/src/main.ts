@@ -6,7 +6,8 @@ import { EventsOn } from '../wailsjs/runtime/runtime';
 import { t, setCatalog, lang } from './i18n';
 import { bytes, count, pct, date, esc, h } from './format';
 import { VList } from './vlist';
-import { initClean, cleanPanel, addToSelection, isSelected, cleanReclaimable } from './clean';
+import { initClean, cleanPanel, addToSelection, isSelected, cleanReclaimable, cleanHooks } from './clean';
+import { startMulti } from './multi';
 
 // ---- State -------------------------------------------------------------------
 
@@ -106,7 +107,13 @@ export function contextMenu(e: MouseEvent, id: number, isDir: boolean) {
 
 // ---- Welcome screen ----------------------------------------------------------------
 
+/** goHome shows the welcome screen. */
+export function goHome() {
+  return welcome();
+}
+
 async function welcome() {
+  cleanHooks.afterDone = null;
   state.summary = null;
   tm?.destroy();
   tm = null;
@@ -119,6 +126,16 @@ async function welcome() {
   const minSize = h('select', { id: 'minsize' },
     h('option', { value: '0' }, '—'), h('option', { value: '4k' }, '4 K'), h('option', { value: '64k' }, '64 K'), h('option', { value: '1M' }, '1 M'));
   const grid = h('div', { class: 'vols' });
+  // Volumes checked for a multi-disk cleanup (a click on a card still
+  // opens that volume alone).
+  const picked = new Set<string>();
+  const multiBtn = h('button', { class: 'btn primary' }) as HTMLButtonElement;
+  const syncMulti = () => {
+    multiBtn.textContent = '🧹 ' + t('multi.start', picked.size);
+    multiBtn.disabled = picked.size === 0;
+  };
+  multiBtn.onclick = () => startMulti([...picked], (document.getElementById('engine') as HTMLSelectElement).value);
+  syncMulti();
   for (const v of vols) {
     const used = v.total - v.free;
     const card = h('button', { class: 'vol' },
@@ -127,7 +144,15 @@ async function welcome() {
       h('div', { class: 'muted small' }, t('ui.free_of', bytes(v.free), bytes(v.total))),
       h('div', { class: 'small ' + (v.canMft ? 'ok' : 'muted') }, v.canMft ? 'MFT ⚡' : t('ui.engine.walk')));
     card.onclick = () => startScan(v.root);
-    grid.append(card);
+    const cb = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    cb.onchange = () => {
+      if (cb.checked) picked.add(v.root);
+      else picked.delete(v.root);
+      cell.classList.toggle('picked', cb.checked);
+      syncMulti();
+    };
+    const cell = h('div', { class: 'vol-cell' }, card, h('label', { class: 'vol-pick', title: t('multi.pick') }, cb));
+    grid.append(cell);
   }
   const folder = h('button', { class: 'btn' }, '📁 ' + t('ui.scan_folder'));
   folder.onclick = async () => {
@@ -143,7 +168,8 @@ async function welcome() {
       h('p', { class: 'muted' }, t('ui.welcome_sub')),
       h('div', { class: 'banner ' + (admin ? 'ok' : 'warn') }, admin ? '🛡 ' + t('ui.admin_yes') : '⚠ ' + t('ui.admin_no')),
       grid,
-      h('div', { class: 'row-actions' }, folder, snap),
+      h('div', { class: 'row-actions' }, multiBtn, folder, snap),
+      h('p', { class: 'muted small' }, t('multi.hint')),
       h('div', { class: 'opts' }, h('label', {}, t('ui.engine') + ' ', engineSel), h('label', {}, t('ui.minsize') + ' ', minSize), langButton()),
       h('p', { class: 'muted small' }, t('ui.drop_hint'))));
 }
@@ -230,6 +256,7 @@ EventsOn('scan:canceled', () => {
 // ---- Main screen -------------------------------------------------------------------
 
 async function showMain(dir: number) {
+  cleanHooks.afterDone = null;
   const s = await App.GetSummary();
   state.summary = s;
   state.findings = (await App.GetFindings()) ?? [];

@@ -10,6 +10,8 @@ export function CancelScan():Promise<void>;
 
 export function ExecuteClean(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
 
+export function ExecuteMulti(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
+
 export function Export(arg1:string):Promise<string>;
 
 export function ExportScript(arg1:string):Promise<string>;
@@ -25,6 +27,8 @@ export function GetFindings():Promise<Array<Record<string, any>>>;
 export function GetInfo():Promise<main.Info>;
 
 export function GetItem(arg1:number):Promise<view.Item>;
+
+export function GetMulti():Promise<Array<main.DiskView>>;
 
 export function GetSummary():Promise<main.Summary>;
 
@@ -46,6 +50,8 @@ export function PickFolder():Promise<string>;
 
 export function PlanClean(arg1:main.CleanRequest):Promise<main.PlanView>;
 
+export function PlanMulti(arg1:main.MultiRequest):Promise<main.MultiPlanView>;
+
 export function Reveal(arg1:number):Promise<void>;
 
 export function RuleList():Promise<Array<Record<string, any>>>;
@@ -53,5 +59,7 @@ export function RuleList():Promise<Array<Record<string, any>>>;
 export function SaveSnapshot():Promise<string>;
 
 export function SetLang(arg1:string):Promise<Record<string, string>>;
+
+export function StartMulti(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function StartScan(arg1:string,arg2:string,arg3:string):Promise<void>;

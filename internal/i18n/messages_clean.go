@@ -2,6 +2,10 @@ package i18n
 
 func init() {
 	add("fr", map[string]string{
+		"clean.no_gain_hint":        "Taille trouvée : l'action change la configuration ou compacte, le gain n'est pas garanti et n'est pas compté.",
+		"clean.action.no_gain":      "gain non garanti",
+		"clean.foot.no_gain":        "%d actions sans gain garanti (non comptées)",
+		"clean.canceled_note":       "Nettoyage annulé : les disques restants n'ont pas été traités.",
 		"clean.admin_more":          "+ %s de plus avec les droits administrateur (zones système).",
 		"cli.flag.suggested":        "nettoyage suggéré, sur un ou plusieurs volumes : règles réellement récupérables (vertes ; oranges avec --yes-orange)",
 		"clean.suggested_line":      "Nettoyage suggéré : %s récupérables, %d règles retenues.",
@@ -141,6 +145,10 @@ func init() {
 		"clean.freed_real":     "Espace libre du volume : %s → %s",
 	})
 	add("en", map[string]string{
+		"clean.no_gain_hint":        "Size found: the action changes the configuration or compacts, the gain is not guaranteed and not counted.",
+		"clean.action.no_gain":      "gain not guaranteed",
+		"clean.foot.no_gain":        "%d actions without guaranteed gain (not counted)",
+		"clean.canceled_note":       "Cleanup canceled: the remaining disks were not processed.",
 		"clean.admin_more":          "+ %s more with administrator rights (system areas).",
 		"cli.flag.suggested":        "suggested cleanup, on one or more volumes: really reclaimable rules (green; orange with --yes-orange)",
 		"clean.suggested_line":      "Suggested cleanup: %s reclaimable, %d rules selected.",

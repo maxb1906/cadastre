@@ -26,6 +26,7 @@ Interface en français et en anglais. Licence GPL-3.0.
 | Simulation de nettoyage | `cadastre clean C: --rule temp --rule iis-logs --older-than 30d` |
 | Nettoyage réel | ajouter `--apply` (et `--permanent`, `--yes-orange`, `--official`, `--restore-point` selon les cas) |
 | Script PowerShell équivalent | `cadastre clean C: --rule temp --script nettoyage.ps1` |
+| Nettoyage suggéré sur plusieurs disques | `cadastre clean --suggested C: D:` (simulation), puis `--apply` ; `--yes-orange` ajoute les règles orange |
 | Comparer les deux moteurs | `cadastre check C:` (en administrateur) |
 
 Aide d'une commande : `cadastre <commande> -h`. Langue : `--lang fr|en` (sinon la langue de Windows, ou la variable `CADASTRE_LANG`).

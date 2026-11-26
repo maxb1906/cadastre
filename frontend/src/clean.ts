@@ -23,16 +23,16 @@ const sel = {
 // Rules whose card is unfolded, kept across re-renders.
 const open = new Set<string>();
 
-type Group = 'safe' | 'care' | 'official' | 'info';
+export type Group = 'safe' | 'care' | 'official' | 'info';
 
 /** groupOf sorts a finding by what Cadastre may do with it. */
-function groupOf(f: any): Group {
+export function groupOf(f: any): Group {
   if (f.deletable) return f.risk === 'green' ? 'safe' : 'care';
   if (f.clean === 'official') return 'official';
   return 'info';
 }
 
-const groupIcon: Record<Group | 'manual', string> = { safe: '🟢', care: '🟠', official: '⚙', info: 'ℹ', manual: '✋' };
+export const groupIcon: Record<Group | 'manual', string> = { safe: '🟢', care: '🟠', official: '⚙', info: 'ℹ', manual: '✋' };
 
 export function initClean() {
   // Drop rules that no longer have findings (after a cleanup or a rescan).
@@ -169,7 +169,7 @@ function ruleCard(f: any, selectable: boolean, showRisk: boolean): HTMLElement {
   head.append(
     showRisk ? riskDot(f.risk) : '',
     h('div', { class: 'f-title' }, h('b', {}, f.title), tags),
-    h('div', { class: 'f-size' }, bytes(f.alloc)),
+    sizeCell(f, 'div'),
     h('span', { class: 'chev' }, '›'));
 
   const body = h('div', { class: 'f-body' }, h('div', { class: 'advice' }, f.advice));
@@ -201,6 +201,15 @@ function ruleCard(f: any, selectable: boolean, showRisk: boolean): HTMLElement {
   return card;
 }
 
+/** sizeCell shows what a rule found; when its cleanup has no guaranteed
+ * gain (configuration change, compaction), the size is greyed and says so. */
+export function sizeCell(f: any, tag: 'div' | 'span' = 'span', value = f.alloc): HTMLElement {
+  const noGain = !f.reclaimable && f.clean === 'official';
+  const el = h(tag, { class: 'f-size' + (noGain ? ' muted' : '') }, bytes(value));
+  if (noGain) el.title = t('clean.no_gain_hint');
+  return el;
+}
+
 function manualBlock(): HTMLElement {
   const total = [...sel.entries.values()].reduce((a, m) => a + m.alloc, 0);
   const box = h('div', { class: 'group g-manual' },
@@ -227,7 +236,8 @@ function footer(foot: HTMLElement) {
   const fs = selectedFindings();
   const n = fs.length + sel.entries.size;
   // An estimate: a manual item may sit inside a selected rule.
-  const est = fs.reduce((a, f) => a + (f.reclaimable ? f.reclaim : f.alloc), 0) + [...sel.entries.values()].reduce((a, m) => a + m.alloc, 0);
+  // Real space only: a rule without guaranteed gain adds nothing.
+  const est = fs.reduce((a, f) => a + (f.reclaimable ? f.reclaim : 0), 0) + [...sel.entries.values()].reduce((a, m) => a + m.alloc, 0);
   const seg = h('div', { class: 'seg' });
   for (const [value, label, hint] of [['recycle', t('clean.recycle_short'), t('clean.recycle_desc')], ['permanent', t('clean.permanent_short'), t('clean.permanent_desc')]]) {
     const b = h('button', { class: 'seg-btn' + (sel.mode === value ? ' active' : ''), title: hint }, label);
@@ -245,6 +255,8 @@ function footer(foot: HTMLElement) {
     const perm = fs.filter((f) => f.permanent && !f.official);
     if (perm.length) notes.append(h('div', { class: 'small warn' }, '⚠ ' + t('clean.foot.perm_warn', perm.map((f) => f.title).join(', '))));
   }
+  const noGain = fs.filter((f) => !f.reclaimable && f.clean === 'official').length;
+  if (noGain) notes.append(h('div', { class: 'small muted' }, '≈ ' + t('clean.foot.no_gain', noGain)));
   if (fs.some((f) => f.official)) notes.append(h('div', { class: 'small muted' }, '⚙ ' + t('clean.foot.official_note')));
   if (fs.some((f) => f.risk === 'orange') || sel.entries.size) notes.append(h('div', { class: 'small muted' }, '🟠 ' + t('clean.foot.orange_note')));
   foot.append(
@@ -275,17 +287,36 @@ async function simulate(rules: string[], entries: number[], mode = sel.mode) {
   });
 }
 
-// showPlan is the confirmation screen: every concrete action (files deleted
-// by Cadastre, official actions with their commands), what is left out and
-// why, then one button that really deletes. Behind it, the plan has just
-// been checked item by item on the disk (the mandatory dry-run).
+/** A section of the confirmation screen: one volume's plan. */
+export interface ConfirmSection {
+  title?: string; // volume, shown when several volumes are cleaned
+  plan: any;
+}
+
+export interface ConfirmOptions {
+  mode: string;
+  run: (confirmOrange: boolean, restorePoint: boolean) => Promise<void>;
+  resimPermanent: () => void;
+}
+
 function showPlan(plan: any, resimPermanent: () => void) {
+  showConfirm([{ plan }], {
+    mode: plan.mode,
+    resimPermanent,
+    run: (orange, restore) => App.ExecuteClean(plan.id, orange, restore),
+  });
+}
+
+// showConfirm is the confirmation screen: every concrete action (files
+// deleted by Cadastre, official actions with their commands), what is left
+// out and why, then one button that really deletes. Behind it, each plan has
+// just been checked item by item on the disk (the mandatory dry-run).
+export function showConfirm(sections: ConfirmSection[], opt: ConfirmOptions) {
   const overlay = h('div', { class: 'overlay' });
   const modal = h('div', { class: 'modal confirm' });
   overlay.append(modal);
   const close = () => overlay.remove();
-  const actions: any[] = plan.actions ?? [];
-  const items: any[] = plan.items ?? [];
+  const all = sections.flatMap((s) => (s.plan.actions ?? []) as any[]);
 
   const orange = h('input', { type: 'checkbox' }) as HTMLInputElement;
   const restore = h('input', { type: 'checkbox' }) as HTMLInputElement;
@@ -299,43 +330,43 @@ function showPlan(plan: any, resimPermanent: () => void) {
   const active = (a: any) => a.risk !== 'orange' || orange.checked;
   const render = () => {
     list.replaceChildren();
-    for (const a of actions) list.append(actionRow(a, items, active(a)));
-    const skipped = (plan.skipped ?? []) as any[];
-    if (skipped.length) {
-      const n = skipped.reduce((x, g) => x + g.count, 0);
-      const al = skipped.reduce((x, g) => x + g.alloc, 0);
-      const d = h('details', { class: 'action skipped' },
-        h('summary', {}, h('span', { class: 'a-ico' }, '⏭'), h('span', { class: 'a-title' }, h('b', {}, t('clean.skipped_count', count(n))), h('div', { class: 'muted small' }, t('clean.skipped_sub'))), h('span', { class: 'f-size muted' }, bytes(al))));
-      for (const g of skipped) {
-        d.append(h('div', { class: 'small skip-reason' }, h('b', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`)));
-        for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
+    for (const s of sections) {
+      if (s.title) {
+        const script = h('button', { class: 'btn tiny ghost', title: t('clean.script') }, '📜 .ps1');
+        script.onclick = () => exportScript(s.plan.id);
+        list.append(h('div', { class: 'disk-head' }, h('b', {}, '💽 ' + s.title), h('span', { class: 'spacer' }), script));
       }
-      list.append(d);
+      const actions: any[] = s.plan.actions ?? [];
+      if (!actions.length) list.append(h('div', { class: 'muted small pad' }, t('clean.nothing_doable')));
+      for (const a of actions) list.append(actionRow(a, s.plan.items ?? [], active(a)));
+      const skipped = (s.plan.skipped ?? []) as any[];
+      if (skipped.length) {
+        const n = skipped.reduce((x, g) => x + g.count, 0);
+        const al = skipped.reduce((x, g) => x + g.alloc, 0);
+        const d = h('details', { class: 'action skipped' },
+          h('summary', {}, h('span', { class: 'a-ico' }, '⏭'), h('span', { class: 'a-title' }, h('b', {}, t('clean.skipped_count', count(n))), h('div', { class: 'muted small' }, t('clean.skipped_sub'))), h('span', { class: 'f-size muted' }, bytes(al))));
+        for (const g of skipped) {
+          d.append(h('div', { class: 'small skip-reason' }, h('b', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`)));
+          for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
+        }
+        list.append(d);
+      }
     }
-    const bytesNow = actions.filter(active).reduce((x, a) => x + a.bytes, 0);
-    const doable = actions.filter(active).length;
+    const bytesNow = all.filter(active).reduce((x, a) => x + a.bytes, 0);
+    const doable = all.filter(active).length;
+    const sum = all.reduce((x, a) => x + a.bytes, 0);
     total.textContent = bytes(bytesNow);
-    const all = actions.reduce((x, a) => x + a.bytes, 0);
-    partial.textContent = bytesNow < all ? t('clean.to_free_partial', bytes(all)) : '';
+    partial.textContent = bytesNow < sum ? t('clean.to_free_partial', bytes(sum)) : '';
     run.textContent = '🧹 ' + (doable ? t('clean.run_now', bytes(bytesNow)) : t('clean.run_nothing'));
     run.disabled = !doable;
   };
   orange.onchange = render;
 
-  const script = h('button', { class: 'btn' }, '📜 ' + t('clean.script'));
-  script.onclick = async () => {
-    try {
-      const p = await App.ExportScript(plan.id);
-      if (p) toast(t('ui.saved', p), 'ok');
-    } catch (e) {
-      toast(errorMsg(e), 'error');
-    }
-  };
   const cancel = h('button', { class: 'btn ghost' }, t('ui.cancel'));
   cancel.onclick = close;
   run.onclick = async () => {
     try {
-      await App.ExecuteClean(plan.id, orange.checked, restore.checked);
+      await opt.run(orange.checked, restore.checked);
       close();
       showRunning();
     } catch (e) {
@@ -343,34 +374,49 @@ function showPlan(plan: any, resimPermanent: () => void) {
     }
   };
   // Items left out only because the recycle bin makes no sense there.
-  const need = (plan.skipped ?? []).find((x: any) => x.reason === 'need_permanent');
+  const needs = sections.map((s) => (s.plan.skipped ?? []).find((x: any) => x.reason === 'need_permanent')).filter(Boolean);
   let permNote: HTMLElement | string = '';
-  if (need && plan.mode === 'recycle') {
+  if (needs.length && opt.mode === 'recycle') {
     const b = h('button', { class: 'btn tiny' }, t('clean.resim_permanent'));
     b.onclick = () => {
       close();
-      resimPermanent();
+      opt.resimPermanent();
     };
-    permNote = h('div', { class: 'note' }, t('clean.need_permanent_note', count(need.count), bytes(need.alloc)), ' ', b);
+    permNote = h('div', { class: 'note' }, t('clean.need_permanent_note', count(needs.reduce((x, g) => x + g.count, 0)), bytes(needs.reduce((x, g) => x + g.alloc, 0))), ' ', b);
   }
-  const hasOrange = actions.some((a) => a.risk === 'orange');
-  const hasRestore = actions.some((a) => a.restorePoint);
+  const foot = h('div', { class: 'foot' },
+    all.some((a) => a.risk === 'orange') ? h('label', { class: 'opt warnbox' }, orange, ' ' + t('clean.confirm_orange')) : '',
+    all.some((a) => a.restorePoint) ? h('label', { class: 'opt' }, restore, ' ' + t('clean.restore_point')) : '',
+    h('span', { class: 'spacer' }));
+  // Volume sections carry their own script button.
+  if (sections.length === 1 && !sections[0].title) {
+    const script = h('button', { class: 'btn' }, '📜 ' + t('clean.script'));
+    script.onclick = () => exportScript(sections[0].plan.id);
+    foot.append(script);
+  }
+  foot.append(cancel, run);
 
   modal.append(
     h('h2', {}, t('clean.confirm_title')),
     h('div', { class: 'confirm-head' },
       h('div', {}, h('div', { class: 'muted small' }, t('clean.to_free')), total, partial),
-      h('div', { class: 'small' }, h('div', {}, t('clean.mode_is', t('clean.mode.' + plan.mode))), h('div', { class: 'muted' }, '✔ ' + t('clean.sim_checked')))),
-    plan.fromSnapshot ? h('div', { class: 'note' }, t('clean.snapshot_note')) : '',
+      h('div', { class: 'small' }, h('div', {}, t('clean.mode_is', t('clean.mode.' + opt.mode))), h('div', { class: 'muted' }, '✔ ' + t('clean.sim_checked')))),
+    sections.some((s) => s.plan.fromSnapshot) ? h('div', { class: 'note' }, t('clean.snapshot_note')) : '',
     permNote,
-    actions.length ? '' : h('div', { class: 'note' }, t('clean.nothing_doable')),
+    all.length || sections.length > 1 ? '' : h('div', { class: 'note' }, t('clean.nothing_doable')),
     h('div', { class: 'scroll' }, list),
-    h('div', { class: 'foot' },
-      hasOrange ? h('label', { class: 'opt warnbox' }, orange, ' ' + t('clean.confirm_orange')) : '',
-      hasRestore ? h('label', { class: 'opt' }, restore, ' ' + t('clean.restore_point')) : '',
-      h('span', { class: 'spacer' }), script, cancel, run));
+    foot);
   render();
   document.body.append(overlay);
+}
+
+async function exportScript(planID: string) {
+  try {
+    const p = await App.ExportScript(planID);
+    if (p) toast(t('ui.saved', p), 'ok');
+  } catch (e) {
+    toast(errorMsg(e), 'error');
+  }
 }
 
 function actionRow(a: any, items: any[], active: boolean): HTMLElement {
@@ -382,7 +428,7 @@ function actionRow(a: any, items: any[], active: boolean): HTMLElement {
     h('span', { class: 'risk ' + a.risk, title: t('risk.' + a.risk) }),
     h('span', { class: 'a-title' }, h('b', {}, a.title), h('div', { class: 'small' }, what),
       active ? '' : h('div', { class: 'small warn' }, t('clean.action.needs_orange'))),
-    h('span', { class: 'f-size' }, bytes(a.bytes)));
+    a.noGain ? h('span', { class: 'f-size muted small', title: t('clean.no_gain_hint') }, t('clean.action.no_gain')) : h('span', { class: 'f-size' }, bytes(a.bytes)));
   const d = h('details', { class: 'action' + (active ? '' : ' off') }, head);
   if (official) {
     d.append(h('div', { class: 'small muted' }, t('clean.commands')));
@@ -405,7 +451,7 @@ function actionRow(a: any, items: any[], active: boolean): HTMLElement {
 
 let runOverlay: HTMLElement | null = null;
 
-function showRunning() {
+export function showRunning() {
   const stop = h('button', { class: 'btn' }, t('ui.cancel'));
   stop.onclick = () => App.CancelClean();
   runOverlay = h('div', { class: 'overlay' },
@@ -422,7 +468,7 @@ EventsOn('clean:progress', (p: any) => {
   const bar = document.getElementById('cbar');
   const txt = document.getElementById('ctext');
   if (bar) bar.style.width = (100 * p.done) / Math.max(1, p.total) + '%';
-  if (txt) txt.textContent = `${count(p.done)} / ${count(p.total)} · ${bytes(p.freed)} — ${p.path}`;
+  if (txt) txt.textContent = (p.root ? p.root + ' · ' : '') + `${count(p.done)} / ${count(p.total)} · ${bytes(p.freed)} — ${p.path}`;
 });
 
 EventsOn('clean:error', (msg: string) => {
@@ -446,11 +492,18 @@ EventsOn('clean:done', async (r: any) => {
     h('h2', {}, t('clean.done_title')),
     h('p', {}, h('b', {}, t('clean.result', r.done, r.failed, r.skipped, bytes(r.freed)))),
     r.freeBefore ? h('p', { class: 'muted' }, t('clean.freed_real', bytes(r.freeBefore), bytes(r.freeAfter))) : '',
+    r.canceled ? h('p', { class: 'warn' }, t('clean.canceled_note')) : '',
+    ...(r.disks ?? []).map((d: any) => h('div', { class: 'small disk-result' }, h('b', {}, '💽 ' + d.root + ' : '),
+      d.error ? h('span', { class: 'warn' }, d.error) : t('clean.result', d.done, d.failed, d.skipped, bytes(d.freed)) + ' · ' + t('clean.freed_real', bytes(d.freeBefore), bytes(d.freeAfter)))),
     h('div', { class: 'scroll' }, tbl),
     h('div', { class: 'foot' }, journal, h('span', { class: 'spacer' }), ok)));
   ok.onclick = () => overlay.remove();
   document.body.append(overlay);
-  // Refresh the whole view from the updated index.
-  await refreshMain();
+  // Refresh the screen the cleanup was started from.
+  if (cleanHooks.afterDone) await cleanHooks.afterDone();
+  else await refreshMain();
   updateCount();
 });
+
+/** cleanHooks lets another screen (multi-disk) take over after a cleanup. */
+export const cleanHooks = { afterDone: null as null | (() => Promise<void>) };

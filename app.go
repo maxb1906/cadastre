@@ -43,7 +43,8 @@ type App struct {
 	cancel   context.CancelFunc
 	scanning bool
 
-	clean cleanState // see app_clean.go
+	clean cleanState   // see app_clean.go
+	multi []*multiDisk // multi-disk session, see app_multi.go
 
 	estMu  sync.Mutex
 	est    *clean.Reclaim
@@ -389,7 +390,12 @@ func (a *App) GetFindings() ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := report.Build(cur, report.Options{Lang: a.lang, Top: 1, FindingItems: 200, TreemapNodes: 1, Reclaim: a.reclaim(cur)})
+	return a.findingsOf(cur, a.reclaim(cur)), nil
+}
+
+// findingsOf returns the findings of an analysis for the cleanup panel.
+func (a *App) findingsOf(cur *analysis.Analysis, est *clean.Reclaim) []map[string]any {
+	d := report.Build(cur, report.Options{Lang: a.lang, Top: 1, FindingItems: 200, TreemapNodes: 1, Reclaim: est})
 	out := make([]map[string]any, 0, len(d.Findings))
 	for k, fd := range d.Findings {
 		r := cur.Findings[k].Rule
@@ -402,7 +408,7 @@ func (a *App) GetFindings() ([]map[string]any, error) {
 		m["restorePoint"] = r.Official != nil && r.Official.RestorePoint
 		out = append(out, m)
 	}
-	return out, nil
+	return out
 }
 
 // GetFindingItems lists the items of a finding as rows (paged).

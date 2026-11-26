@@ -204,3 +204,33 @@ select { font: inherit; background: var(--panel2); color: var(--text); border: 1
 .actions .skip-reason { margin-top: 6px; }
 .modal.confirm .warn { color: var(--warn); }
 .chip.ok { color: var(--ok); border-color: var(--ok); }
+
+/* Multi-disk cleanup */
+.vol-cell { position: relative; display: flex; }
+.vol-cell > .vol { flex: 1; }
+.vol-pick { position: absolute; top: 8px; right: 8px; padding: 4px; cursor: pointer; }
+.vol-pick input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); margin: 0; }
+.vol-cell.picked > .vol { border-color: var(--accent); }
+.main.multi { display: flex; flex-direction: column; height: 100%; }
+.multi-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.multi-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 12px; align-items: start; }
+.disk { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.disk-title { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.disk-reclaim { font-weight: 700; color: var(--accent); font-size: 16px; }
+.disk .meter { margin-bottom: 4px; }
+.m-group { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--line); }
+.m-rule { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-radius: 5px; cursor: pointer; }
+.m-rule:hover { background: var(--panel2); }
+.m-rule.off { cursor: default; opacity: .75; }
+.m-rule input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.m-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-tags.inline { flex: 1; margin: 0; flex-wrap: nowrap; overflow: hidden; }
+.multi-foot { border-top: 1px solid var(--line); }
+.multi-foot .foot-sum .btn.primary { width: auto; padding: 8px 18px; }
+.disk-head { display: flex; align-items: center; gap: 8px; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.disk-head:first-child { margin-top: 0; }
+.pad { padding: 6px 2px; }
+.disk-result { margin: 2px 0; }
+.m-group b { white-space: nowrap; }
+.m-group .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-size.muted { font-weight: 500; }
