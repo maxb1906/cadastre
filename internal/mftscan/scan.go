@@ -2,8 +2,8 @@ package mftscan
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"runtime"
 	"time"
 
 	"github.com/maxb1906/cadastre/internal/index"
@@ -64,27 +64,13 @@ func Scan(ctx context.Context, r io.ReaderAt, vi ntfs.VolumeInfo, opt Options) (
 	b := &builder{ix: ix, parentSeq: make([]uint16, layout.RecordCount), minSize: opt.MinSize, recSize: recSize}
 	sr := ntfs.NewStreamReader(r, layout.Runs, vi.BytesPerCluster, layout.MFTSize())
 
-	buf := make([]byte, chunk)
-	var rec ntfs.Record
-	res := newChunkResult()
-	var pending []extPart
-	dosOnly := map[uint32]bool{}
-	for first := uint64(0); first < layout.RecordCount; first += perChunk {
-		if err := ctx.Err(); err != nil {
-			return nil, st, err
-		}
-		count := min(perChunk, layout.RecordCount-first)
-		p := buf[:count*uint64(recSize)]
-		if _, err := sr.ReadAt(p, int64(first)*int64(recSize)); err != nil {
-			return nil, st, fmt.Errorf("mftscan: reading records %d-%d: %w", first, first+count-1, err)
-		}
-		b.processChunk(p, first, int(count), &rec, res)
-		st.InUse += res.inUse
-		st.Bad += res.bad
-		b.merge(res, &pending, dosOnly)
-		if opt.Progress != nil {
-			opt.Progress(first+count, layout.RecordCount)
-		}
+	workers := opt.Workers
+	if workers <= 0 {
+		workers = runtime.GOMAXPROCS(0)
+	}
+	pending, dosOnly, err := b.pipeline(ctx, sr, layout.RecordCount, perChunk, chunk, workers, &st, opt.Progress)
+	if err != nil {
+		return nil, st, err
 	}
 	st.Extensions = uint64(len(pending))
 	finish(b, pending, dosOnly)
