@@ -60,6 +60,22 @@ export async function addToSelection(id?: number, rule?: string) {
   if (state.tab === 'clean') renderPanel();
 }
 
+/** cleanReclaimable checks exactly the rules behind the "Reclaimable" card
+ * and opens the simulation of those rules. */
+export async function cleanReclaimable() {
+  const ids = state.findings.filter((f: any) => f.reclaimable).map((f: any) => f.id as string);
+  if (!ids.length) {
+    toast(t('clean.nothing_reclaimable'));
+    return;
+  }
+  sel.rules = new Set(ids);
+  state.tab = 'clean';
+  document.querySelectorAll('.right .tab').forEach((x) => x.classList.toggle('active', (x as HTMLElement).dataset.tab === 'clean'));
+  updateCount();
+  renderPanel();
+  await simulate(ids, []);
+}
+
 function updateCount() {
   const el = document.getElementById('sel-count');
   if (el) {

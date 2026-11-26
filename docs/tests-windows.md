@@ -12,8 +12,9 @@ Ouvrir **PowerShell en administrateur** dans le dossier de l'exe.
 1. Double-clic sur `cadastre.exe` (sans admin) : l'accueil signale « Sans droits administrateur ». Relever `C:` doit passer par le parcours classique.
 2. Clic droit → *Exécuter en tant qu'administrateur* : les volumes NTFS affichent « MFT ⚡ ». Relever `C:`. Points à vérifier :
    - durée affichée (objectif : quelques secondes pour 1 M de fichiers) ;
-   - onglet **Fantômes** : WinSxS en 🔴, Windows Update, temporaires, corbeilles avec nom d'utilisateur ;
-   - onglet **Espace** : décomposition (métafichiers `$MFT`, `$LogFile`, `$UsnJrnl:$J`, VSS…) et écart non attribué faible ;
+   - onglet **À nettoyer** : règles classées en Sans risque / Avec précaution / Action officielle / Pour information ; WinSxS en 🔴 dans Action officielle, Windows Update marqué « via Arrêt des services… », temporaires marqués « définitif uniquement », corbeilles avec nom d'utilisateur. Sans admin : les règles système portent « admin requis » ;
+   - cases à cocher (règle et groupe entier), dépliage d'une règle, ajout d'un fichier par clic droit → groupe « Sélection manuelle » ; le pied du panneau suit la sélection et reste visible en défilant ;
+   - onglet **Espace manquant** : décomposition (métafichiers `$MFT`, `$LogFile`, `$UsnJrnl:$J`, VSS…) et écart non attribué faible ;
    - navigation : double-clic dans la liste, clic dans la treemap, `Retour arrière` pour remonter, clic droit → *Afficher dans l'Explorateur* ;
    - **Exporter** → Rapport HTML (s'ouvre dans le navigateur), CSV (s'ouvre dans Excel avec les accents) ;
    - **Snapshot** puis glisser-déposer le `.cad` sur la fenêtre.
@@ -65,7 +66,10 @@ Get-Content "$env:ProgramData\Cadastre\journal\$(Get-Date -f yyyy-MM-dd).jsonl" 
 .\cadastre.exe clean T: --path T:\data\big.bin --apply --yes-orange | Out-Host    # corbeille → vérifier la Corbeille
 ```
 
-Dans la GUI : Fantômes → « Ajouter au nettoyage », onglet Nettoyage → Simuler → confirmer → Lancer. Vérifier ensuite la Corbeille Windows et le journal.
+Dans la GUI (relevé de `T:`) :
+1. Onglet **À nettoyer** : cocher une règle 🟢, choisir Corbeille, *Simuler le nettoyage* → confirmer → Lancer. Vérifier la Corbeille Windows et le journal.
+2. Carte **Récupérable** : un clic coche exactement les règles qui composent le chiffre (le total du pied doit être égal à la carte) et ouvre la simulation. En mode Corbeille, les temporaires sont écartés et un bandeau propose *Simuler en mode définitif* : vérifier que la nouvelle simulation les inclut.
+3. Sans cocher la confirmation orange, lancer : seuls les éléments 🟢 sont supprimés, les 🟠 apparaissent « ignorés » dans le résultat et le journal.
 
 Actions officielles (sur C:, avec prudence) :
 `cadastre clean C: --rule delivery-optimization --official --apply` lance `Delete-DeliveryOptimizationCache`.

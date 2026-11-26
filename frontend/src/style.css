@@ -182,3 +182,9 @@ select { font: inherit; background: var(--panel2); color: var(--text); border: 1
 .g-manual .sel-row .num { flex: none; }
 .stat-sec { margin-bottom: 12px; }
 .stat-sec > summary { cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); padding: 4px 0; }
+.stat.action { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, transform .1s; }
+.stat.action:hover { border-color: var(--accent); }
+.stat.action:active { transform: translateY(1px); }
+.stat.action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stat .s.cta { color: var(--accent); font-weight: 600; margin-top: 2px; }
+.tbl td.num, .tbl th.num { text-align: right; }

@@ -6,7 +6,7 @@ import { EventsOn } from '../wailsjs/runtime/runtime';
 import { t, setCatalog, lang } from './i18n';
 import { bytes, count, pct, date, esc, h } from './format';
 import { VList } from './vlist';
-import { initClean, cleanPanel, addToSelection, isSelected } from './clean';
+import { initClean, cleanPanel, addToSelection, isSelected, cleanReclaimable } from './clean';
 
 // ---- State -------------------------------------------------------------------
 
@@ -305,7 +305,7 @@ async function showMain(dir: number) {
         stat(t('rep.card.files'), count(s.totals.Files), t('rep.card.dirs', count(s.totals.Dirs))),
         stat(t('ui.alloc'), bytes(s.totals.Alloc), bytes(s.totals.Size) + ' ' + t('ui.size').toLowerCase()),
         s.recon && s.recon.used ? stat(t('rep.card.used'), bytes(s.recon.used), t('rep.card.of', bytes(s.recon.total), pct(s.recon.used, s.recon.total))) : '',
-        stat(t('rep.card.ghosts'), bytes(s.reclaimable), t('rep.card.ghosts_sub', state.findings.length), 'accent'),
+        reclaimCard(s),
         s.recon && s.recon.missing > 0 ? stat(t('rep.card.missing'), bytes(s.recon.missing), t('rep.card.missing_sub')) : '',
         s.warnings?.length ? h('div', { class: 'warnings' }, ...s.warnings.map((w: string) => h('div', { class: 'warn-line' }, '⚠ ' + w))) : ''),
       h('div', { class: 'body' },
@@ -353,6 +353,20 @@ async function showMain(dir: number) {
 /** Re-renders the main screen from the current (possibly cleaned) index. */
 export async function refreshMain() {
   await showMain(state.dir);
+}
+
+/** The "Reclaimable" card is a button: it checks exactly the rules behind
+ * its figure and opens their simulation. */
+function reclaimCard(s: any): HTMLElement {
+  const sub = t('rep.card.ghosts_sub', state.findings.length);
+  if (!s.reclaimable) return stat(t('rep.card.ghosts'), bytes(0), sub, 'accent');
+  const b = h('button', { class: 'stat accent action', title: t('clean.reclaim_hint') },
+    h('div', { class: 'k' }, t('rep.card.ghosts')),
+    h('div', { class: 'v' }, bytes(s.reclaimable)),
+    h('div', { class: 's' }, sub),
+    h('div', { class: 's cta' }, '🧹 ' + t('clean.reclaim_cta') + ' →'));
+  b.onclick = () => cleanReclaimable();
+  return b;
 }
 
 function stat(k: string, v: string, sub: string, cls = '') {

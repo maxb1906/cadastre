@@ -2,6 +2,9 @@ package i18n
 
 func init() {
 	add("fr", map[string]string{
+		"clean.reclaim_cta":         "Nettoyer",
+		"clean.reclaim_hint":        "Sélectionne les règles qui composent ce chiffre et ouvre la simulation",
+		"clean.nothing_reclaimable": "Rien de récupérable sur ce relevé.",
 		"clean.check_all":           "Tout cocher / décocher",
 		"clean.group.safe":          "Sans risque",
 		"clean.group.safe_desc":     "Régénérables ou inutiles : supprimables directement.",
@@ -124,6 +127,9 @@ func init() {
 		"clean.freed_real":     "Espace libre du volume : %s → %s",
 	})
 	add("en", map[string]string{
+		"clean.reclaim_cta":         "Clean up",
+		"clean.reclaim_hint":        "Selects the rules behind this figure and opens the simulation",
+		"clean.nothing_reclaimable": "Nothing reclaimable in this survey.",
 		"clean.check_all":           "Check / uncheck all",
 		"clean.group.safe":          "Safe",
 		"clean.group.safe_desc":     "Regenerable or useless: can be deleted directly.",
