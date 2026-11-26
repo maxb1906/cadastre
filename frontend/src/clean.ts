@@ -305,7 +305,7 @@ function showPlan(plan: any, resimPermanent: () => void) {
       const n = skipped.reduce((x, g) => x + g.count, 0);
       const al = skipped.reduce((x, g) => x + g.alloc, 0);
       const d = h('details', { class: 'action skipped' },
-        h('summary', {}, h('span', { class: 'a-ico' }, '⏭'), h('span', { class: 'a-title' }, h('b', {}, t('clean.skipped_title', count(n))), h('div', { class: 'muted small' }, t('clean.skipped_sub'))), h('span', { class: 'f-size muted' }, bytes(al))));
+        h('summary', {}, h('span', { class: 'a-ico' }, '⏭'), h('span', { class: 'a-title' }, h('b', {}, t('clean.skipped_count', count(n))), h('div', { class: 'muted small' }, t('clean.skipped_sub'))), h('span', { class: 'f-size muted' }, bytes(al))));
       for (const g of skipped) {
         d.append(h('div', { class: 'small skip-reason' }, h('b', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`)));
         for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
