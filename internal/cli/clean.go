@@ -21,25 +21,36 @@ import (
 	"github.com/maxb1906/cadastre/internal/volume"
 )
 
-// runClean: simulation by default; --apply is required to act.
+// cleanOpts are the flags of "cadastre clean".
+type cleanOpts struct {
+	apply, permanent, yesOrange, official, restore, yes, suggested bool
+	script, journal, engine, report                                string
+}
+
+// runClean: simulation by default; --apply is required to act. With
+// --suggested, several volumes may be given: each gets the suggested
+// selection (rules whose space is really reclaimable, green only unless
+// --yes-orange).
 func runClean(ctx context.Context, env *Env, args []string) error {
 	fs := newFlagSet(env, "clean", "cli.clean.usage")
 	var ruleIDs, paths, ruleFiles multiFlag
+	var o cleanOpts
 	fs.Var(&ruleIDs, "rule", i18n.T(env.Lang, "cli.flag.rule"))
 	fs.Var(&paths, "path", i18n.T(env.Lang, "cli.flag.path"))
 	fs.Var(&ruleFiles, "rules", i18n.T(env.Lang, "cli.flag.rules"))
 	olderThan := fs.String("older-than", "", i18n.T(env.Lang, "cli.flag.olderthan"))
-	apply := fs.Bool("apply", false, i18n.T(env.Lang, "cli.flag.apply"))
-	permanent := fs.Bool("permanent", false, i18n.T(env.Lang, "cli.flag.permanent"))
-	yesOrange := fs.Bool("yes-orange", false, i18n.T(env.Lang, "cli.flag.yesorange"))
-	official := fs.Bool("official", false, i18n.T(env.Lang, "cli.flag.official"))
-	restore := fs.Bool("restore-point", false, i18n.T(env.Lang, "cli.flag.restore"))
-	script := fs.String("script", "", i18n.T(env.Lang, "cli.flag.script"))
-	yes := fs.Bool("yes", false, i18n.T(env.Lang, "cli.flag.yes"))
-	journalDir := fs.String("journal", "", i18n.T(env.Lang, "cli.flag.journal"))
-	eng := fs.String("engine", "auto", i18n.T(env.Lang, "cli.flag.engine"))
+	fs.BoolVar(&o.suggested, "suggested", false, i18n.T(env.Lang, "cli.flag.suggested"))
+	fs.BoolVar(&o.apply, "apply", false, i18n.T(env.Lang, "cli.flag.apply"))
+	fs.BoolVar(&o.permanent, "permanent", false, i18n.T(env.Lang, "cli.flag.permanent"))
+	fs.BoolVar(&o.yesOrange, "yes-orange", false, i18n.T(env.Lang, "cli.flag.yesorange"))
+	fs.BoolVar(&o.official, "official", false, i18n.T(env.Lang, "cli.flag.official"))
+	fs.BoolVar(&o.restore, "restore-point", false, i18n.T(env.Lang, "cli.flag.restore"))
+	fs.StringVar(&o.script, "script", "", i18n.T(env.Lang, "cli.flag.script"))
+	fs.BoolVar(&o.yes, "yes", false, i18n.T(env.Lang, "cli.flag.yes"))
+	fs.StringVar(&o.journal, "journal", "", i18n.T(env.Lang, "cli.flag.journal"))
+	fs.StringVar(&o.engine, "engine", "auto", i18n.T(env.Lang, "cli.flag.engine"))
 	listRules := fs.Bool("list-rules", false, i18n.T(env.Lang, "cli.flag.listrules"))
-	reportPath := fs.String("report", "", i18n.T(env.Lang, "cli.flag.report"))
+	fs.StringVar(&o.report, "report", "", i18n.T(env.Lang, "cli.flag.report"))
 	pos, err := parseFlags(fs, args)
 	if err != nil {
 		return errUsage
@@ -51,12 +62,16 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 	if *listRules {
 		return printRules(env, cat)
 	}
-	if len(pos) != 1 || len(ruleIDs) == 0 && len(paths) == 0 {
+	switch {
+	case o.suggested && (len(pos) == 0 || len(ruleIDs) > 0 || len(paths) > 0 || *olderThan != ""):
+		fs.Usage()
+		return errUsage
+	case !o.suggested && (len(pos) != 1 || len(ruleIDs) == 0 && len(paths) == 0):
 		fs.Usage()
 		return errUsage
 	}
-	sel := clean.Selection{Rules: ruleIDs, Official: *official, Mode: clean.ModeRecycle}
-	if *permanent {
+	sel := clean.Selection{Rules: ruleIDs, Official: o.official, Mode: clean.ModeRecycle}
+	if o.permanent {
 		sel.Mode = clean.ModePermanent
 	}
 	for _, id := range ruleIDs {
@@ -74,13 +89,49 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 			sel.OlderThan[id] = age
 		}
 	}
+	many := len(pos) > 1
+	for k, target := range pos {
+		if many {
+			if k > 0 {
+				fmt.Fprintln(env.Stdout)
+			}
+			fmt.Fprintf(env.Stdout, "━━ %s ━━\n", target)
+		}
+		if err := cleanVolume(ctx, env, cat, sel, paths, o, target, many); err != nil {
+			if !many {
+				return err
+			}
+			// One failing volume does not stop the others.
+			fmt.Fprintf(env.Stderr, "%s: %v\n", target, err)
+		}
+	}
+	return nil
+}
 
+// cleanVolume scans one volume, plans its cleanup, prints the simulation and
+// runs it when --apply is given.
+func cleanVolume(ctx context.Context, env *Env, cat *rules.Catalog, sel clean.Selection, paths []string, o cleanOpts, target string, many bool) error {
 	// A fresh scan: a cleanup never relies on an old view of the disk.
-	res, err := engine.Scan(ctx, pos[0], engine.Options{Engine: *eng})
+	res, err := engine.Scan(ctx, target, engine.Options{Engine: o.engine})
 	if err != nil {
 		return err
 	}
 	a := analysis.Run(res, cat, analysis.Options{OlderThan: sel.OlderThan})
+	admin := volume.IsAdmin()
+	if o.suggested {
+		est := clean.EstimateReclaim(a, clean.Env{Admin: admin})
+		sel.Rules = clean.Suggested(a, est, o.yesOrange)
+		// Rules with an official action go through it, as in the interface.
+		sel.Official = true
+		fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.suggested_line", units.Bytes(est.Total, env.Lang), len(sel.Rules)))
+		if est.AdminOnly > 0 {
+			fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.admin_more", units.Bytes(est.AdminOnly, env.Lang)))
+		}
+		if len(sel.Rules) == 0 {
+			fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.no_items"))
+			return nil
+		}
+	}
 	for _, p := range paths {
 		i, ok := res.Index.Find(p)
 		if !ok {
@@ -89,12 +140,14 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 		sel.Entries = append(sel.Entries, i)
 	}
 	running, _ := sysinfo.RunningProcesses()
-	plan := clean.Build(a, sel, clean.Env{Admin: volume.IsAdmin(), Running: running})
+	plan := clean.Build(a, sel, clean.Env{Admin: admin, Running: running})
 	clean.Prepare(plan, clean.OSFS{})
 	printPlan(env, plan)
+	tag := volumeTag(res.Volume.Root)
 
-	if *script != "" {
-		f, err := os.Create(*script)
+	if o.script != "" {
+		path := suffixed(o.script, tag, many)
+		f, err := os.Create(path)
 		if err != nil {
 			return err
 		}
@@ -103,23 +156,23 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 			return err
 		}
 		f.Close()
-		fmt.Fprintln(env.Stderr, i18n.T(env.Lang, "cli.written", *script))
+		fmt.Fprintln(env.Stderr, i18n.T(env.Lang, "cli.written", path))
 	}
 	if len(plan.Items) == 0 && len(plan.Official) == 0 {
 		fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.no_items"))
 		return nil
 	}
-	if !*apply {
+	if !o.apply {
 		fmt.Fprintln(env.Stdout, "\n"+i18n.T(env.Lang, "clean.need_apply"))
-		if plan.Orange && !*yesOrange {
+		if plan.Orange && !o.yesOrange {
 			fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.need_orange"))
 		}
 		return nil
 	}
-	if plan.Orange && !*yesOrange {
+	if plan.Orange && !o.yesOrange {
 		fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.need_orange"))
 	}
-	if !*yes {
+	if !o.yes {
 		fmt.Fprint(env.Stdout, i18n.T(env.Lang, "clean.confirm", units.Count(uint64(len(plan.Items)), env.Lang),
 			units.Bytes(plan.Bytes, env.Lang), i18n.T(env.Lang, "clean.mode."+plan.Mode)))
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -129,7 +182,7 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 			return nil
 		}
 	}
-	j, err := clean.OpenJournal(*journalDir)
+	j, err := clean.OpenJournal(o.journal)
 	if err != nil {
 		return err
 	}
@@ -137,8 +190,8 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 	freeBefore := res.Volume.Free
 	last := -1
 	r, err := clean.Execute(ctx, plan, clean.OSFS{}, j, clean.Options{
-		ConfirmOrange: *yesOrange,
-		RestorePoint:  *restore,
+		ConfirmOrange: o.yesOrange,
+		RestorePoint:  o.restore,
 		Running: func() map[string]bool {
 			m, _ := sysinfo.RunningProcesses()
 			return m
@@ -159,9 +212,9 @@ func runClean(ctx context.Context, env *Env, args []string) error {
 		fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.freed_real", units.Bytes(freeBefore, env.Lang), units.Bytes(v.Free, env.Lang)))
 	}
 	fmt.Fprintln(env.Stdout, i18n.T(env.Lang, "clean.journal", r.Journal))
-	if *reportPath != "" {
+	if o.report != "" {
 		a = clean.Refresh(ctx, a, r, analysis.Options{})
-		f, err := os.Create(*reportPath)
+		f, err := os.Create(suffixed(o.report, tag, many))
 		if err != nil {
 			return err
 		}

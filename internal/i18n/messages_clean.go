@@ -2,6 +2,9 @@ package i18n
 
 func init() {
 	add("fr", map[string]string{
+		"clean.admin_more":          "+ %s de plus avec les droits administrateur (zones système).",
+		"cli.flag.suggested":        "nettoyage suggéré, sur un ou plusieurs volumes : règles réellement récupérables (vertes ; oranges avec --yes-orange)",
+		"clean.suggested_line":      "Nettoyage suggéré : %s récupérables, %d règles retenues.",
 		"clean.tag.reclaim":         "%s récupérables",
 		"clean.card_perm_only":      "dont %s en mode définitif uniquement",
 		"clean.to_free_partial":     "sur %s : cochez la confirmation orange pour inclure le reste",
@@ -57,7 +60,7 @@ func init() {
 		"script.simulated":          "Simulation : rien n'a été supprimé. Relancez avec -Apply pour agir.",
 
 		"cli.cmd.clean":        "nettoie selon des règles ou des chemins (simulation par défaut)",
-		"cli.clean.usage":      "Utilisation : cadastre clean C: --rule temp [--rule iis-logs] [--path C:\\dossier] [--older-than 30d] [--apply]",
+		"cli.clean.usage":      "Utilisation : cadastre clean C: --rule temp [--rule iis-logs] [--path C:\\dossier] [--older-than 30d] [--apply]\n              cadastre clean --suggested C: D: [--yes-orange] [--permanent] [--apply]",
 		"cli.flag.rule":        "règle à nettoyer (répétable ; cadastre clean --list-rules pour la liste)",
 		"cli.flag.path":        "chemin à supprimer (répétable, risque orange)",
 		"cli.flag.olderthan":   "ne garder que les fichiers plus vieux que (ex. 30d) pour les règles choisies",
@@ -138,6 +141,9 @@ func init() {
 		"clean.freed_real":     "Espace libre du volume : %s → %s",
 	})
 	add("en", map[string]string{
+		"clean.admin_more":          "+ %s more with administrator rights (system areas).",
+		"cli.flag.suggested":        "suggested cleanup, on one or more volumes: really reclaimable rules (green; orange with --yes-orange)",
+		"clean.suggested_line":      "Suggested cleanup: %s reclaimable, %d rules selected.",
 		"clean.tag.reclaim":         "%s reclaimable",
 		"clean.card_perm_only":      "of which %s in permanent mode only",
 		"clean.to_free_partial":     "out of %s: tick the orange confirmation to include the rest",
@@ -193,7 +199,7 @@ func init() {
 		"script.simulated":          "Simulation: nothing was deleted. Run again with -Apply to act.",
 
 		"cli.cmd.clean":        "cleans by rules or paths (simulation by default)",
-		"cli.clean.usage":      "Usage: cadastre clean C: --rule temp [--rule iis-logs] [--path C:\\folder] [--older-than 30d] [--apply]",
+		"cli.clean.usage":      "Usage: cadastre clean C: --rule temp [--rule iis-logs] [--path C:\\folder] [--older-than 30d] [--apply]\n       cadastre clean --suggested C: D: [--yes-orange] [--permanent] [--apply]",
 		"cli.flag.rule":        "rule to clean (repeatable; cadastre clean --list-rules for the list)",
 		"cli.flag.path":        "path to delete (repeatable, orange risk)",
 		"cli.flag.olderthan":   "keep only files older than (e.g. 30d) for the chosen rules",
