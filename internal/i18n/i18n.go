@@ -68,3 +68,16 @@ type Printer struct{ Lang string }
 
 // T translates key.
 func (p Printer) T(key string, args ...any) string { return T(p.Lang, key, args...) }
+
+// add merges messages into the catalog (used by the messages_*.go files).
+func add(lang string, m map[string]string) {
+	if catalog[lang] == nil {
+		catalog[lang] = map[string]string{}
+	}
+	for k, v := range m {
+		if _, dup := catalog[lang][k]; dup {
+			panic("i18n: duplicate key " + lang + "/" + k)
+		}
+		catalog[lang][k] = v
+	}
+}

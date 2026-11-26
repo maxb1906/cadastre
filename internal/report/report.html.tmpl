@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="{{.D.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Cadastre {{.D.Version}}">
+<title>{{t "rep.title" .D.Volume.Root}} — Cadastre</title>
+<style>
+:root{--bg:#0f1318;--panel:#171c23;--panel2:#1d232b;--line:#2a323d;--text:#e3e8ef;--muted:#93a0b1;--accent:#5aa9e6;
+--green:#3fb37f;--orange:#e39b3b;--red:#e0565b;--files:#5aa9e6;--ads:#b48ae6;--dirindex:#6dc2b8;--meta:#e3c25a;--vss:#e0565b;--sysvol:#d07ab0;--unattributed:#6b7685}
+@media (prefers-color-scheme: light){:root{--bg:#f5f6f8;--panel:#fff;--panel2:#f0f2f5;--line:#dde1e7;--text:#1b2129;--muted:#5d6876}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:22px 32px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{margin:0 0 4px;font-size:22px;font-weight:650;letter-spacing:.2px}
+header .meta{color:var(--muted);font-size:13px}
+main{padding:20px 32px 40px;max-width:1500px;margin:0 auto}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:0 0 18px}
+h2{font-size:16px;margin:0 0 12px;font-weight:650}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+.card .v{font-size:24px;font-weight:650;margin-top:2px}
+.card .s{color:var(--muted);font-size:12px}
+.bar{display:flex;height:18px;border-radius:5px;overflow:hidden;background:var(--panel2);margin:8px 0 12px}
+.bar span{display:block;height:100%}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.path{word-break:break-all;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:12px}
+.risk{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.risk.green{background:var(--green)}.risk.orange{background:var(--orange)}.risk.red{background:var(--red)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);margin-right:4px}
+details summary{cursor:pointer;color:var(--accent);font-size:12px;margin-top:4px}
+.advice{color:var(--muted);font-size:12px}
+.warn{border-left:3px solid var(--orange);padding:6px 10px;background:var(--panel2);margin:6px 0;border-radius:0 6px 6px 0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+#tm-wrap{height:560px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+#tm-crumbs{margin:0 0 8px;font-size:13px}
+#tm-crumbs a{color:var(--accent);cursor:pointer;text-decoration:none}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;color:var(--muted);font-size:12px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:1000px){.cols{grid-template-columns:1fr}main{padding:14px}}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:10px 0 30px}
+.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>{{t "rep.title" .D.Volume.Root}}{{if .D.Volume.Label}} <span class="small">« {{.D.Volume.Label}} »</span>{{end}}</h1>
+  <div class="meta">{{t "rep.generated" (date .D.Generated)}} · {{t (printf "engine.%s" .D.Engine)}} · {{t "rep.duration" (dur .D.DurationSec)}} · {{if .D.Volume.FileSystem}}{{.D.Volume.FileSystem}} · {{end}}{{if .D.Admin}}{{t "rep.admin"}}{{else}}{{t "rep.noadmin"}}{{end}}{{if .D.FromSnapshot}} · {{t "rep.snapshot"}}{{end}} · Cadastre {{.D.Version}}</div>
+</header>
+<main>
+<div class="cards">
+  {{with .D.Recon}}{{if .Used}}
+  <div class="card"><div class="k">{{t "rep.card.used"}}</div><div class="v">{{b .Used}}</div><div class="s">{{t "rep.card.of" (b .Total) (pct .Used .Total)}} · {{t "rep.card.free" (b .Free)}}</div></div>
+  {{end}}{{end}}
+  <div class="card"><div class="k">{{t "rep.card.files"}}</div><div class="v">{{n .D.Totals.Files}}</div><div class="s">{{t "rep.card.dirs" (n .D.Totals.Dirs)}}</div></div>
+  <div class="card"><div class="k">{{t "rep.card.ghosts"}}</div><div class="v">{{b .Reclaimable}}</div><div class="s">{{t "rep.card.ghosts_sub" (len .D.Findings)}}</div></div>
+  {{with .D.Recon}}{{if gt .Missing 0}}
+  <div class="card"><div class="k">{{t "rep.card.missing"}}</div><div class="v">{{b (u .Missing)}}</div><div class="s">{{t "rep.card.missing_sub"}}</div></div>
+  {{end}}{{end}}
+</div>
+
+{{if .D.Warnings}}<section><h2>{{t "rep.warnings"}}</h2>{{range .D.Warnings}}<div class="warn">{{.}}</div>{{end}}</section>{{end}}
+
+{{with .D.Recon}}{{if .Used}}
+<section>
+  <h2>{{t "recon.title"}}</h2>
+  <p>{{t "recon.summary" (b .Used) (b .Total) (b ($.Comp "files").Bytes)}}{{if gt .Missing 0}} {{t "rep.recon.missing" (b (u .Missing))}}{{end}}</p>
+  <div class="bar">{{range .Components}}{{if .Bytes}}<span style="width:{{share .Bytes $.D.Recon.Used}}%;background:var(--{{.Key}})" title="{{t (printf "recon.%s" .Key)}} : {{b .Bytes}}"></span>{{end}}{{end}}</div>
+  <table>
+    <tr><th>{{t "rep.component"}}</th><th class="num">{{t "col.alloc"}}</th><th class="num">%</th><th>{{t "rep.detail"}}</th></tr>
+    {{range .Components}}{{if .Bytes}}
+    <tr><td><span class="dot" style="background:var(--{{.Key}})"></span>{{t (printf "recon.%s" .Key)}}{{if eq .Source "wmi"}} <span class="tag">WMI</span>{{end}}</td>
+      <td class="num">{{b .Bytes}}</td><td class="num">{{pct .Bytes $.D.Recon.Used}}</td>
+      <td class="small">{{range $k, $d := .Details}}{{if lt $k 6}}{{$d.Name}} {{b $d.Bytes}}{{if lt $k 5}} · {{end}}{{end}}{{end}}</td></tr>
+    {{end}}{{end}}
+  </table>
+  {{with .VSS}}{{if .Known}}<p class="small">{{t "rep.vss" (b .Used) (b .Allocated) (b .Max) .Copies}}</p>{{end}}{{end}}
+  {{range .Notes}}<div class="warn">{{t .}}</div>{{end}}
+</section>
+{{end}}{{end}}
+
+<section>
+  <h2>{{t "ghosts.title"}}</h2>
+  {{if not .D.Findings}}<p>{{t "ghosts.none"}}</p>{{else}}
+  <table>
+    <tr><th>{{t "rep.risk"}}</th><th>{{t "col.rule"}}</th><th class="num">{{t "col.alloc"}}</th><th class="num">{{t "col.files"}}</th><th>{{t "rep.action"}}</th></tr>
+    {{range .D.Findings}}
+    <tr>
+      <td style="white-space:nowrap"><span class="risk {{.Risk}}"></span>{{t (printf "risk.%s" .Risk)}}</td>
+      <td><b>{{.Title}}</b> <span class="tag">{{.ID}}</span>{{if .ADSOnly}} <span class="tag">ADS</span>{{end}}
+        <div class="advice">{{.Advice}}</div>
+        {{if .Groups}}<div class="small">{{range .Groups}}{{.Label}} : {{b .Alloc}}{{if .Ghost}} ⚠{{end}} · {{end}}</div>{{end}}
+        {{if .Items}}<details><summary>{{t "rep.items" (len .Items)}}{{if .MoreItems}} {{t "rep.more" .MoreItems}}{{end}}</summary>
+          <table>{{range .Items}}<tr><td class="path">{{.Path}}</td><td class="num">{{b .Alloc}}</td><td class="num small">{{shortdate .MTime}}</td></tr>{{end}}</table>
+        </details>{{end}}
+      </td>
+      <td class="num">{{b .Alloc}}</td><td class="num">{{n .Files}}</td>
+      <td class="small">{{if .Deletable}}{{t "rep.clean.delete"}}{{else if eq .Clean "official"}}{{t "rep.clean.official" .Official}}{{else}}{{t "rep.clean.none"}}{{end}}</td>
+    </tr>
+    {{end}}
+  </table>{{end}}
+</section>
+
+<section>
+  <h2>{{t "rep.treemap"}}</h2>
+  <div id="tm-crumbs"></div>
+  <div id="tm-wrap"></div>
+  <div class="legend" id="tm-legend"></div>
+</section>
+
+<div class="cols">
+<section>
+  <h2>{{t "top.files"}}</h2>
+  <table><tr><th>{{t "col.path"}}</th><th class="num">{{t "col.alloc"}}</th><th class="num">{{t "col.size"}}</th><th class="num">{{t "col.modified"}}</th></tr>
+  {{range .D.TopFiles}}<tr><td class="path">{{.Path}}{{range .Flags}} <span class="tag">{{.}}</span>{{end}}</td><td class="num">{{b .Alloc}}</td><td class="num">{{b .Size}}</td><td class="num small">{{shortdate .MTime}}</td></tr>{{end}}
+  </table>
+</section>
+<section>
+  <h2>{{t "top.dirs"}}</h2>
+  <table><tr><th>{{t "col.path"}}</th><th class="num">{{t "col.alloc"}}</th><th class="num">{{t "col.files"}}</th></tr>
+  {{range .D.TopDirs}}<tr><td class="path">{{.Path}}</td><td class="num">{{b .Alloc}}</td><td class="num">{{n .Files}}</td></tr>{{end}}
+  </table>
+</section>
+</div>
+
+<section>
+  <h2>{{t "top.exts"}}</h2>
+  <table><tr><th>{{t "col.ext"}}</th><th class="num">{{t "col.alloc"}}</th><th class="num">{{t "col.size"}}</th><th class="num">{{t "col.files"}}</th><th class="num">%</th></tr>
+  {{range .D.Extensions}}<tr><td>{{if .Ext}}.{{.Ext}}{{else}}{{t "ext.none"}}{{end}}</td><td class="num">{{b .Alloc}}</td><td class="num">{{b .Size}}</td><td class="num">{{n .Files}}</td><td class="num">{{pct .Alloc $.D.Totals.Alloc}}</td></tr>{{end}}
+  </table>
+</section>
+
+{{with .D.Cleanup}}
+<section>
+  <h2>{{t "rep.cleanup"}}</h2>
+  <p>{{t "rep.cleanup.summary" .Done .Failed .Skipped (b .Freed)}}</p>
+  <p class="small">{{t "rep.cleanup.journal" .Journal}}</p>
+  <table><tr><th>{{t "rep.cleanup.time"}}</th><th>{{t "rep.action"}}</th><th>{{t "col.path"}}</th><th class="num">{{t "col.size"}}</th><th>{{t "rep.cleanup.result"}}</th></tr>
+  {{range .Entries}}<tr><td class="small">{{.Time}}</td><td>{{.Action}} <span class="tag">{{.Mode}}</span></td><td class="path">{{.Path}}</td><td class="num">{{b .Size}}</td><td>{{.Result}}{{if .Detail}} <span class="small">{{.Detail}}</span>{{end}}</td></tr>{{end}}
+  </table>
+</section>
+{{end}}
+</main>
+<footer>{{t "rep.footer"}}</footer>
+<script type="application/json" id="cad-treemap">{{.TreemapJSON}}</script>
+<script type="application/json" id="cad-i18n">{{.I18NJSON}}</script>
+<script>{{.TreemapJS}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('cad-treemap').textContent);
+  var tr = JSON.parse(document.getElementById('cad-i18n').textContent);
+  var lang = document.documentElement.lang;
+  var units = lang === 'fr' ? ['o', 'Ko', 'Mo', 'Go', 'To', 'Po'] : ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  function fmt(n) {
+    var k = 0;
+    while (n >= 1024 && k < units.length - 1) { n /= 1024; k++; }
+    var s = k === 0 ? String(n) : n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2);
+    return (lang === 'fr' ? s.replace('.', ',') : s) + ' ' + units[k];
+  }
+  var dark = !window.matchMedia || !window.matchMedia('(prefers-color-scheme: light)').matches;
+  var stack = [data];
+  var tm = new CadastreTreemap.Treemap(document.getElementById('tm-wrap'), {
+    format: fmt, dark: dark,
+    othersLabel: function (n) { return tr.others.replace('%d', n); },
+    onClick: function (node, e, path) {
+      // path: ancestors of node from the displayed root (path[0]).
+      var chain = path ? path.slice(1) : [];
+      if (node.d && node.c && node.c.length) chain.push(node);
+      if (chain.length) { stack = stack.concat(chain); show(); }
+    },
+    onContext: function () { if (stack.length > 1) { stack.pop(); show(); } }
+  });
+  function show() {
+    var cur = stack[stack.length - 1];
+    tm.setData(cur);
+    var c = document.getElementById('tm-crumbs');
+    c.innerHTML = '';
+    stack.forEach(function (n, k) {
+      var a = document.createElement(k === stack.length - 1 ? 'b' : 'a');
+      a.textContent = n.n + ' (' + fmt(n.s) + ')';
+      if (k < stack.length - 1) a.onclick = function () { stack = stack.slice(0, k + 1); show(); };
+      c.appendChild(a);
+      if (k < stack.length - 1) c.appendChild(document.createTextNode(' › '));
+    });
+    var hint = document.createElement('span');
+    hint.className = 'small';
+    hint.textContent = '   ' + tr.hint;
+    c.appendChild(hint);
+  }
+  var lg = document.getElementById('tm-legend');
+  CadastreTreemap.families.forEach(function (f) {
+    var col = CadastreTreemap.colors[f];
+    var s = document.createElement('span');
+    s.innerHTML = '<span class="dot" style="background:rgb(' + col.join(',') + ')"></span>' + (tr['fam.' + f] || f);
+    lg.appendChild(s);
+  });
+  show();
+})();
+</script>
+</body>
+</html>
