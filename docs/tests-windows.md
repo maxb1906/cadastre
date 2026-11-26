@@ -63,7 +63,7 @@ go test ./internal/engine ./internal/clean -run Integration -v
 powershell -File $env:TEMP\t.ps1                                                   # le script, en simulation
 .\cadastre.exe clean T: --rule temp --permanent --apply | Out-Host                 # demande « oui »
 Get-Content "$env:ProgramData\Cadastre\journal\$(Get-Date -f yyyy-MM-dd).jsonl" -Tail 5
-.\cadastre.exe clean T: --path T:\data\big.bin --apply --yes-orange | Out-Host    # corbeille → vérifier la Corbeille
+.\cadastre.exe clean T: --path T:\data\notes.txt --apply --yes-orange | Out-Host  # corbeille → vérifier la Corbeille ; big.bin a un lien dur : message explicite
 ```
 
 Dans la GUI (relevé de `T:`) :

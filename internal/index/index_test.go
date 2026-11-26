@@ -88,6 +88,26 @@ func TestFind(t *testing.T) {
 	}
 }
 
+// A second hard-link name is not a child of its folder (the file is indexed
+// once, under its primary name), but FindLink resolves it.
+func TestFindLink(t *testing.T) {
+	ix, id := tree()
+	ix.Attr[id["iso"]] |= FlagHardlink
+	ix.Links[id["iso"]] = []Link{{Parent: id["temp"], Name: "copy.iso"}}
+	ix.Finalize()
+	if _, ok := ix.Find(`C:\Windows\Temp\copy.iso`); ok {
+		t.Error("Find must not resolve a secondary link name")
+	}
+	for _, p := range []string{`C:\Windows\Temp\COPY.iso`, `windows/temp/copy.iso`} {
+		if got, ok := ix.FindLink(p); !ok || got != id["iso"] {
+			t.Errorf("FindLink(%q) = %d,%v want %d", p, got, ok, id["iso"])
+		}
+	}
+	if _, ok := ix.FindLink(`C:\Windows\copy.iso`); ok {
+		t.Error("FindLink matched the wrong folder")
+	}
+}
+
 func TestOrphansAndCycles(t *testing.T) {
 	ix, id := tree()
 	// Entry whose parent slot is invalid.

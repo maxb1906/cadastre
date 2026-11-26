@@ -4,6 +4,7 @@ package engine
 
 import (
 	"context"
+	"github.com/maxb1906/cadastre/internal/index"
 	"os"
 	"testing"
 )
@@ -45,9 +46,24 @@ func TestIntegrationOracle(t *testing.T) {
 	ix := a.Index
 	checks := map[string]func(i uint32) bool{
 		`data\notes.txt`:  func(i uint32) bool { s, _ := ix.ADSTotals(i); return ix.Size[i] == 10000 && s == 200000 },
-		`data\big.bin`:    func(i uint32) bool { return ix.Size[i] == 50<<20 },
 		`data\sparse.bin`: func(i uint32) bool { return ix.Size[i] == 1<<30 && ix.Alloc[i] < 1<<20 },
 		`data\junction`:   func(i uint32) bool { return len(ix.Kids(i)) == 0 },
+	}
+	// big.bin and Users\alice\big-link.bin are one file: it is indexed once,
+	// under whichever name the engine met first, the other being a link.
+	big, found := ix.Find(`data\big.bin`)
+	if !found {
+		big, found = ix.Find(`Users\alice\big-link.bin`)
+	}
+	if !found || ix.Size[big] != 50<<20 || !ix.Has(big, index.FlagHardlink) {
+		t.Errorf("big.bin / big-link.bin: unexpected (found=%v)", found)
+	} else {
+		// a is the MFT engine: it records every name.
+		_, l1 := ix.FindLink(`data\big.bin`)
+		_, l2 := ix.FindLink(`Users\alice\big-link.bin`)
+		if !l1 && !l2 {
+			t.Error("the second hard-link name is not recorded")
+		}
 	}
 	for p, ok := range checks {
 		i, found := ix.Find(p)

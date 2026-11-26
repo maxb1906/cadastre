@@ -2,6 +2,7 @@ package i18n
 
 func init() {
 	add("fr", map[string]string{
+		"clean.hardlink_name":       "%s est un second nom (lien dur) de %s : supprimer ce seul nom ne libère rien. Indiquez le nom principal pour supprimer le fichier.",
 		"clean.no_gain_hint":        "Taille trouvée : l'action change la configuration ou compacte, le gain n'est pas garanti et n'est pas compté.",
 		"clean.action.no_gain":      "gain non garanti",
 		"clean.foot.no_gain":        "%d actions sans gain garanti (non comptées)",
@@ -145,6 +146,7 @@ func init() {
 		"clean.freed_real":     "Espace libre du volume : %s → %s",
 	})
 	add("en", map[string]string{
+		"clean.hardlink_name":       "%s is a second name (hard link) of %s: deleting that name alone frees nothing. Give the primary name to delete the file.",
 		"clean.no_gain_hint":        "Size found: the action changes the configuration or compacts, the gain is not guaranteed and not counted.",
 		"clean.action.no_gain":      "gain not guaranteed",
 		"clean.foot.no_gain":        "%d actions without guaranteed gain (not counted)",

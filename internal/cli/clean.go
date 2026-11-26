@@ -135,6 +135,12 @@ func cleanVolume(ctx context.Context, env *Env, cat *rules.Catalog, sel clean.Se
 	for _, p := range paths {
 		i, ok := res.Index.Find(p)
 		if !ok {
+			// Another name of a hard-linked file: deleting that name alone
+			// would free nothing, and Cadastre deletes files by the name it
+			// indexed. Say so rather than "no longer exists".
+			if j, isLink := res.Index.FindLink(p); isLink {
+				return fmt.Errorf("%s", i18n.T(env.Lang, "clean.hardlink_name", p, res.Index.Path(j)))
+			}
 			return fmt.Errorf("%s: %s", i18n.T(env.Lang, "clean.reason.gone"), p)
 		}
 		sel.Entries = append(sel.Entries, i)

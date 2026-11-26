@@ -359,6 +359,33 @@ func (ix *Index) Find(path string) (uint32, bool) {
 	return cur, true
 }
 
+// FindLink resolves a path whose last component is an additional hard-link
+// name: the index keeps each file once, under its primary name, and lists the
+// other names in Links. It returns the entry (whose Path is the primary name).
+func (ix *Index) FindLink(path string) (uint32, bool) {
+	cut := strings.LastIndexAny(path, `\/`)
+	if cut < 0 {
+		cut = -1
+	}
+	name := path[cut+1:]
+	dir := ""
+	if cut > 0 {
+		dir = path[:cut]
+	}
+	d, ok := ix.Find(dir)
+	if !ok || name == "" {
+		return 0, false
+	}
+	for i, links := range ix.Links {
+		for _, l := range links {
+			if l.Parent == d && equalFold([]byte(l.Name), []byte(name)) {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // equalFold compares names case-insensitively (ASCII fast path, then Unicode
 // simple folding, which matches NTFS for practical purposes).
 func equalFold(a, b []byte) bool {
