@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 
+	"github.com/maxb1906/cadastre/internal/cli"
 	"github.com/maxb1906/cadastre/internal/report"
 )
 
@@ -11,4 +12,7 @@ import (
 //go:embed frontend/src/shared/treemap.js
 var treemapJS string
 
-func init() { report.TreemapJS = treemapJS }
+func init() {
+	report.TreemapJS = treemapJS
+	report.Version = cli.Version
+}

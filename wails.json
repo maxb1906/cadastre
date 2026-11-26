@@ -9,5 +9,12 @@
   "author": {
     "name": "maxb1906",
     "email": "maxime.boosten@gmail.com"
+  },
+  "info": {
+    "companyName": "maxb1906",
+    "productName": "Cadastre",
+    "productVersion": "1.0.0",
+    "copyright": "Cadastre — GPL-3.0-or-later",
+    "comments": "Analyseur d'empreinte disque et de fichiers fantômes"
   }
 }
