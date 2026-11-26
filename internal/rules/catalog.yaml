@@ -11,6 +11,10 @@
 # clean : delete (suppression par Cadastre), official (action officielle
 # uniquement), none (signalement).
 # Placeholders des actions : {path} {path_ps} {drive} {logname} {backup}.
+# official.reclaims: true si l'action supprime réellement les cibles ; leur
+# espace compte alors dans « Récupérable ». Laissé à false pour les actions
+# qui changent la configuration (powercfg) ou dont le gain est inconnu
+# (Optimize-VHD, wevtutil). Une étape « clean: items » compte toujours.
 
 rules:
   - id: memory-dumps
@@ -74,6 +78,7 @@ rules:
     clean: official
     official:
       title: {fr: "Delete-DeliveryOptimizationCache", en: "Delete-DeliveryOptimizationCache"}
+      reclaims: true
       steps:
         - run: [powershell.exe, -NoProfile, -NonInteractive, -Command, "Delete-DeliveryOptimizationCache -Force"]
 
@@ -107,6 +112,7 @@ rules:
     clean: official
     official:
       title: {fr: "Nettoyage de disque", en: "Disk Cleanup"}
+      reclaims: true
       steps:
         - run: [cleanmgr.exe, "/d", "{drive}"]
 

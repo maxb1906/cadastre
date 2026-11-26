@@ -364,6 +364,7 @@ function reclaimCard(s: any): HTMLElement {
     h('div', { class: 'k' }, t('rep.card.ghosts')),
     h('div', { class: 'v' }, bytes(s.reclaimable)),
     h('div', { class: 's' }, sub),
+    s.reclaimPermanentOnly ? h('div', { class: 's' }, t('clean.card_perm_only', bytes(s.reclaimPermanentOnly))) : '',
     h('div', { class: 's cta' }, '🧹 ' + t('clean.reclaim_cta') + ' →'));
   b.onclick = () => cleanReclaimable();
   return b;

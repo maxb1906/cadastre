@@ -295,3 +295,28 @@ func TestExampleRulesFile(t *testing.T) {
 		t.Error("app-logs missing")
 	}
 }
+
+func TestRuleReclaimable(t *testing.T) {
+	cat := MustBuiltin()
+	want := map[string]bool{
+		"memory-dumps":          true,  // green, delete
+		"windows-update-cache":  true,  // orange, delete (official too)
+		"delivery-optimization": true,  // orange, official only
+		"component-store":       false, // red: official action offered, never counted
+		"installer-orphans":     false, // red, report only
+		"pagefile":              false, // report only
+		"upgrade-leftovers":     true,  // Disk Cleanup deletes Windows.old
+		"hibernation":           false, // powercfg /h off: a configuration change
+		"virtual-disks":         false, // Optimize-VHD compacts, gain unknown
+		"event-logs":            false, // wevtutil cl: gain not guaranteed
+	}
+	for id, w := range want {
+		r, ok := cat.Get(id)
+		if !ok {
+			t.Fatalf("rule %s missing", id)
+		}
+		if r.Reclaimable() != w {
+			t.Errorf("%s: Reclaimable() = %v, want %v", id, r.Reclaimable(), w)
+		}
+	}
+}

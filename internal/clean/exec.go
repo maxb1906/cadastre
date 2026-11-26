@@ -38,6 +38,7 @@ func Prepare(p *Plan, fs FS) {
 	p.Items = check(p.Items)
 	for k := range p.Official {
 		p.Official[k].Items = check(p.Official[k].Items)
+		p.Official[k].settle()
 	}
 	p.Files, p.Bytes = 0, 0
 	for _, it := range p.Items {

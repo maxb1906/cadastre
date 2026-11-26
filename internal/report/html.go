@@ -80,18 +80,6 @@ func ftoa(v float64) string {
 	return string(b)
 }
 
-// reclaimable sums the space of deletable findings or those with an
-// official action.
-func reclaimable(d *Data) uint64 {
-	var total uint64
-	for _, f := range d.Findings {
-		if f.Reclaimable {
-			total += f.Alloc
-		}
-	}
-	return total
-}
-
 // WriteHTML writes a standalone HTML report (one file, treemap included).
 func WriteHTML(w io.Writer, d *Data) error {
 	tm, err := json.Marshal(d.Treemap) // json escapes <, > and & as \u00XX
@@ -105,7 +93,7 @@ func WriteHTML(w io.Writer, d *Data) error {
 	trj, _ := json.Marshal(tr)
 	js := strings.ReplaceAll(TreemapJS, "</script", `<\/script`)
 	page := &htmlPage{D: d, TreemapJSON: template.JS(tm), I18NJSON: template.JS(trj), TreemapJS: template.JS(js)}
-	page.Reclaimable = reclaimable(d)
+	page.Reclaimable = d.Reclaimable
 	t, err := template.New("report").Funcs(Funcs(d.Lang)).Parse(htmlTemplate)
 	if err != nil {
 		return err

@@ -57,17 +57,6 @@ func Run(res *engine.Result, cat *rules.Catalog, opt Options) *Analysis {
 	return a
 }
 
-// Reclaimable sums the space of the findings whose rule is reclaimable.
-func (a *Analysis) Reclaimable() uint64 {
-	var total uint64
-	for _, f := range a.Findings {
-		if f.Rule.Reclaimable() {
-			total += f.Alloc
-		}
-	}
-	return total
-}
-
 // Finding returns the finding of a rule, if any.
 func (a *Analysis) Finding(id string) *rules.Finding {
 	for _, f := range a.Findings {

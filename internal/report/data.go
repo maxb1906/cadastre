@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/maxb1906/cadastre/internal/analysis"
+	"github.com/maxb1906/cadastre/internal/clean"
 	"github.com/maxb1906/cadastre/internal/i18n"
 	"github.com/maxb1906/cadastre/internal/index"
 	"github.com/maxb1906/cadastre/internal/reclaim"
@@ -42,6 +43,7 @@ type FindingData struct {
 	Official    string        `json:"official,omitempty"`
 	Deletable   bool          `json:"deletable"`
 	Reclaimable bool          `json:"reclaimable"`
+	Reclaim     uint64        `json:"reclaim"` // space really freed by its cleanup
 	Files       uint64        `json:"files"`
 	Size        uint64        `json:"size"`
 	Alloc       uint64        `json:"alloc"`
@@ -92,11 +94,15 @@ type Data struct {
 	Warnings     []string                `json:"warnings"`
 	Recon        *reclaim.Reconciliation `json:"reconciliation"`
 	Findings     []FindingData           `json:"findings"`
-	TopFiles     []Item                  `json:"topFiles"`
-	TopDirs      []Item                  `json:"topFolders"`
-	Extensions   []index.ExtStat         `json:"extensions"`
-	Cleanup      *CleanupSummary         `json:"cleanup,omitempty"`
-	Treemap      *view.Node              `json:"-"`
+	// Reclaimable is the space really freed by cleaning every reclaimable
+	// rule (see clean.EstimateReclaim).
+	Reclaimable          uint64          `json:"reclaimable"`
+	ReclaimPermanentOnly uint64          `json:"reclaimPermanentOnly"`
+	TopFiles             []Item          `json:"topFiles"`
+	TopDirs              []Item          `json:"topFolders"`
+	Extensions           []index.ExtStat `json:"extensions"`
+	Cleanup              *CleanupSummary `json:"cleanup,omitempty"`
+	Treemap              *view.Node      `json:"-"`
 }
 
 // Options tunes the content of a report.
@@ -106,6 +112,8 @@ type Options struct {
 	FindingItems int // items listed per finding (default 50)
 	TreemapNodes int // default 5000
 	Cleanup      *CleanupSummary
+	// Reclaim is the precomputed estimate (computed when nil).
+	Reclaim *clean.Reclaim
 }
 
 func (o *Options) defaults() {
@@ -152,12 +160,18 @@ func Build(a *analysis.Analysis, opt Options) *Data {
 	for _, w := range r.Warnings {
 		d.Warnings = append(d.Warnings, p.T(w.Key, w.Args...))
 	}
+	est := opt.Reclaim
+	if est == nil {
+		e := clean.EstimateReclaim(a, clean.Env{Admin: r.Admin})
+		est = &e
+	}
+	d.Reclaimable, d.ReclaimPermanentOnly = est.Total, est.PermanentOnly
 	for _, f := range a.Findings {
 		fd := FindingData{
 			ID: f.Rule.ID, Title: f.Rule.Title.In(opt.Lang), Category: f.Rule.Category, Risk: f.Rule.Risk,
 			Advice: f.Rule.Advice.In(opt.Lang), Clean: f.Rule.Clean, Deletable: f.Rule.Deletable(),
-			Reclaimable: f.Rule.Reclaimable(),
-			Files:       f.Files, Size: f.Size, Alloc: f.Alloc, ADSOnly: f.ADSOnly, Groups: f.Groups,
+			Reclaimable: f.Rule.Reclaimable(), Reclaim: est.ByRule[f.Rule.ID],
+			Files: f.Files, Size: f.Size, Alloc: f.Alloc, ADSOnly: f.ADSOnly, Groups: f.Groups,
 			OlderThan: f.Rule.OlderThan, MinSize: f.Rule.MinSize, CloudSkip: f.CloudSkipped, Unavailable: f.EnvUnavailable,
 		}
 		if f.Rule.HasOfficial() {

@@ -70,6 +70,11 @@ type Official struct {
 	Steps        []Step `yaml:"steps" json:"steps"`
 	PerItem      bool   `yaml:"per_item" json:"perItem"`
 	RestorePoint bool   `yaml:"restore_point" json:"restorePoint"`
+	// Reclaims tells that the action deletes the targets, so their space
+	// counts as reclaimable. Off for actions that change the configuration
+	// (powercfg /h off) or whose gain is unknown (Optimize-VHD, wevtutil cl).
+	// An action with a "clean: items" step always reclaims its items.
+	Reclaims bool `yaml:"reclaims" json:"reclaims"`
 }
 
 // Rule is one entry of the catalogue.
@@ -101,11 +106,23 @@ type Rule struct {
 func (r *Rule) Deletable() bool { return r.Clean == CleanDelete && r.Risk != RiskRed }
 
 // Reclaimable reports whether the rule's space counts as reclaimable: Cadastre
-// may delete its items itself, or run its official action (never for red
-// rules, whose official action is only offered). It is the single definition
-// behind the "reclaimable" figure of the interface and the reports.
+// may delete its items itself, or run an official action that deletes them
+// (never for red rules, whose official action is only offered). Official
+// actions that change the configuration or compact a file do not count.
 func (r *Rule) Reclaimable() bool {
-	return r.Deletable() || r.Clean == CleanOfficial && r.Risk != RiskRed
+	if r.Deletable() {
+		return true
+	}
+	return r.Clean == CleanOfficial && r.Risk != RiskRed && r.HasOfficial() && (r.Official.Reclaims || r.Official.cleansItems())
+}
+
+func (o *Official) cleansItems() bool {
+	for _, s := range o.Steps {
+		if s.Clean == "items" {
+			return true
+		}
+	}
+	return false
 }
 
 // HasOfficial reports whether the rule has an official action.

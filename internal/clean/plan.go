@@ -81,6 +81,22 @@ type Official struct {
 	Targets      []string   `json:"targets"`         // paths concerned (for the journal and the rescan)
 	Alloc        uint64     `json:"alloc"`
 	System       bool       `json:"system"`
+
+	byItems bool // the space is that of Items (a "clean: items" step)
+}
+
+// settle bases the space of an action that deletes items on the items it
+// still holds (left-out ones free nothing).
+func (o *Official) settle() {
+	if !o.byItems {
+		return
+	}
+	o.Alloc = 0
+	for _, it := range o.Items {
+		if !it.Dir {
+			o.Alloc += it.Alloc
+		}
+	}
 }
 
 // Selection is what the user asked to clean.
@@ -397,6 +413,7 @@ func (b *builder) addOfficial(r *rules.Rule, f *rules.Finding, sel Selection) {
 	} else {
 		for _, s := range r.Official.Steps {
 			if s.Clean == "items" {
+				o.byItems = true
 				o.Commands = append(o.Commands, nil)
 				for _, i := range f.Items {
 					b.addEntry(i, r.ID, r.Risk, true, false, r.System, r.CloseFirst, ModePermanent, &o.Items)
@@ -474,6 +491,7 @@ func (b *builder) finish() {
 	order(b.p.Items)
 	for k := range b.p.Official {
 		order(b.p.Official[k].Items)
+		b.p.Official[k].settle()
 	}
 	for _, it := range b.p.Items {
 		if !it.Dir {

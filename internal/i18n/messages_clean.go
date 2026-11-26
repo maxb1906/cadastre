@@ -2,6 +2,8 @@ package i18n
 
 func init() {
 	add("fr", map[string]string{
+		"clean.tag.reclaim":         "%s récupérables",
+		"clean.card_perm_only":      "dont %s en mode définitif uniquement",
 		"clean.to_free_partial":     "sur %s : cochez la confirmation orange pour inclure le reste",
 		"clean.confirm_title":       "Nettoyage : vérifiez avant de supprimer",
 		"clean.to_free":             "À libérer",
@@ -135,6 +137,8 @@ func init() {
 		"clean.freed_real":     "Espace libre du volume : %s → %s",
 	})
 	add("en", map[string]string{
+		"clean.tag.reclaim":         "%s reclaimable",
+		"clean.card_perm_only":      "of which %s in permanent mode only",
 		"clean.to_free_partial":     "out of %s: tick the orange confirmation to include the rest",
 		"clean.confirm_title":       "Cleanup: review before deleting",
 		"clean.to_free":             "To free",

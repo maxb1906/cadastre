@@ -17,6 +17,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/maxb1906/cadastre/internal/analysis"
+	"github.com/maxb1906/cadastre/internal/clean"
 	"github.com/maxb1906/cadastre/internal/cli"
 	"github.com/maxb1906/cadastre/internal/engine"
 	"github.com/maxb1906/cadastre/internal/i18n"
@@ -43,6 +44,22 @@ type App struct {
 	scanning bool
 
 	clean cleanState // see app_clean.go
+
+	estMu  sync.Mutex
+	est    *clean.Reclaim
+	estFor *analysis.Analysis
+}
+
+// reclaim returns the real reclaimable space of an analysis, computed once
+// per analysis (a new scan or a cleanup gives a new one).
+func (a *App) reclaim(cur *analysis.Analysis) *clean.Reclaim {
+	a.estMu.Lock()
+	defer a.estMu.Unlock()
+	if a.estFor != cur {
+		e := clean.EstimateReclaim(cur, clean.Env{Admin: volume.IsAdmin()})
+		a.est, a.estFor = &e, cur
+	}
+	return a.est
 }
 
 // NewApp creates the backend.
@@ -276,7 +293,7 @@ func (a *App) Export(kind string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	opt := report.Options{Lang: a.lang, Cleanup: a.cleanupSummary()}
+	opt := report.Options{Lang: a.lang, Cleanup: a.cleanupSummary(), Reclaim: a.reclaim(cur)}
 	switch kind {
 	case "html":
 		err = report.WriteHTML(f, report.Build(cur, opt))
@@ -311,6 +328,7 @@ type Summary struct {
 	Warnings     []string                `json:"warnings"`
 	Recon        *reclaim.Reconciliation `json:"recon"`
 	Reclaimable  uint64                  `json:"reclaimable"`
+	PermOnly     uint64                  `json:"reclaimPermanentOnly"`
 	Entries      int                     `json:"entries"`
 	MemoryMB     uint64                  `json:"memoryMb"`
 }
@@ -329,7 +347,8 @@ func (a *App) GetSummary() (*Summary, error) {
 	for _, w := range r.Warnings {
 		s.Warnings = append(s.Warnings, i18n.T(a.lang, w.Key, w.Args...))
 	}
-	s.Reclaimable = cur.Reclaimable()
+	est := a.reclaim(cur)
+	s.Reclaimable, s.PermOnly = est.Total, est.PermanentOnly
 	return s, nil
 }
 
@@ -370,7 +389,7 @@ func (a *App) GetFindings() ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := report.Build(cur, report.Options{Lang: a.lang, Top: 1, FindingItems: 200, TreemapNodes: 1})
+	d := report.Build(cur, report.Options{Lang: a.lang, Top: 1, FindingItems: 200, TreemapNodes: 1, Reclaim: a.reclaim(cur)})
 	out := make([]map[string]any, 0, len(d.Findings))
 	for k, fd := range d.Findings {
 		r := cur.Findings[k].Rule

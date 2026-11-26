@@ -302,6 +302,7 @@ export namespace main {
 	    warnings: string[];
 	    recon?: reclaim.Reconciliation;
 	    reclaimable: number;
+	    reclaimPermanentOnly: number;
 	    entries: number;
 	    memoryMb: number;
 	
@@ -324,6 +325,7 @@ export namespace main {
 	        this.warnings = source["warnings"];
 	        this.recon = this.convertValues(source["recon"], reclaim.Reconciliation);
 	        this.reclaimable = source["reclaimable"];
+	        this.reclaimPermanentOnly = source["reclaimPermanentOnly"];
 	        this.entries = source["entries"];
 	        this.memoryMb = source["memoryMb"];
 	    }

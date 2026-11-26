@@ -373,3 +373,47 @@ func TestPlanActions(t *testing.T) {
 	Prepare(p, OSFS{})
 	check("prepare")
 }
+
+// The reclaimable estimate is what a cleanup really frees: the plan of every
+// reclaimable rule, never configuration changes nor red rules.
+func TestEstimateReclaim(t *testing.T) {
+	v := newVolume(t)
+	v.mk("hiberfil.sys", 9000, 0)
+	a := analyze(t, v.root)
+	if a.Finding("hibernation") == nil || a.Finding("component-store") == nil {
+		t.Fatal("fixture: expected hibernation and WinSxS findings")
+	}
+	est := EstimateReclaim(a, Env{Admin: true})
+	for _, id := range []string{"hibernation", "component-store", "pagefile"} {
+		if est.ByRule[id] != 0 {
+			t.Errorf("%s counted as reclaimable: %d", id, est.ByRule[id])
+		}
+	}
+	if est.ByRule["temp"] == 0 || est.ByRule["node-modules"] == 0 || est.ByRule["memory-dumps"] == 0 {
+		t.Errorf("missing rules: %v", est.ByRule)
+	}
+	// Only the aged temp files: the fresh one is not part of the finding.
+	if est.PermanentOnly != est.ByRule["temp"] {
+		t.Errorf("permanent only %d, temp %d", est.PermanentOnly, est.ByRule["temp"])
+	}
+	var sum uint64
+	for _, b := range est.ByRule {
+		sum += b
+	}
+	if sum != est.Total {
+		t.Errorf("by rule %d, total %d", sum, est.Total)
+	}
+	// The cleanup screen of the same selection shows the same total.
+	var ids []string
+	for id := range est.ByRule {
+		ids = append(ids, id)
+	}
+	if p := Build(a, Selection{Rules: ids, Mode: ModePermanent, Official: true}, Env{Admin: true}); p.Bytes != est.Total {
+		t.Errorf("plan %d, estimate %d", p.Bytes, est.Total)
+	}
+	// Without administrator rights, system zones cannot be cleaned: their
+	// space is not reclaimable.
+	if na := EstimateReclaim(a, Env{}); na.ByRule["temp"] != 0 || na.ByRule["memory-dumps"] != 0 || na.ByRule["node-modules"] == 0 || na.Total >= est.Total {
+		t.Errorf("without admin: %v", na.ByRule)
+	}
+}

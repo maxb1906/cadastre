@@ -203,3 +203,4 @@ select { font: inherit; background: var(--panel2); color: var(--text); border: 1
 .actions .cmd { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
 .actions .skip-reason { margin-top: 6px; }
 .modal.confirm .warn { color: var(--warn); }
+.chip.ok { color: var(--ok); border-color: var(--ok); }

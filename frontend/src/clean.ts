@@ -63,7 +63,7 @@ export async function addToSelection(id?: number, rule?: string) {
 /** cleanReclaimable checks exactly the rules behind the "Reclaimable" card
  * and opens the simulation of those rules. */
 export async function cleanReclaimable() {
-  const ids = state.findings.filter((f: any) => f.reclaimable).map((f: any) => f.id as string);
+  const ids = state.findings.filter((f: any) => f.reclaim > 0).map((f: any) => f.id as string);
   if (!ids.length) {
     toast(t('clean.nothing_reclaimable'));
     return;
@@ -162,6 +162,9 @@ function ruleCard(f: any, selectable: boolean, showRisk: boolean): HTMLElement {
   if (f.permanent && !f.official) tag(t('clean.tag.permanent'), 'warn');
   if (f.system && !state.info.admin) tag('🛡 ' + t('clean.tag.admin'), 'warn');
   if (f.closeFirst?.length) tag(t('clean.tag.close', f.closeFirst.join(', ')));
+  // Part of what was found that a cleanup would really free (the rest is
+  // protected, a hard link, a placeholder… or needs administrator rights).
+  if (f.reclaimable && f.reclaim > 0 && f.reclaim < f.alloc) tag(t('clean.tag.reclaim', bytes(f.reclaim)), 'ok');
   // In the safe and care groups the group already tells the risk.
   head.append(
     showRisk ? riskDot(f.risk) : '',
@@ -224,7 +227,7 @@ function footer(foot: HTMLElement) {
   const fs = selectedFindings();
   const n = fs.length + sel.entries.size;
   // An estimate: a manual item may sit inside a selected rule.
-  const est = fs.reduce((a, f) => a + f.alloc, 0) + [...sel.entries.values()].reduce((a, m) => a + m.alloc, 0);
+  const est = fs.reduce((a, f) => a + (f.reclaimable ? f.reclaim : f.alloc), 0) + [...sel.entries.values()].reduce((a, m) => a + m.alloc, 0);
   const seg = h('div', { class: 'seg' });
   for (const [value, label, hint] of [['recycle', t('clean.recycle_short'), t('clean.recycle_desc')], ['permanent', t('clean.permanent_short'), t('clean.permanent_desc')]]) {
     const b = h('button', { class: 'seg-btn' + (sel.mode === value ? ' active' : ''), title: hint }, label);
