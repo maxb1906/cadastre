@@ -42,6 +42,7 @@ func Scan(ctx context.Context, target string, opt Options) (*Result, error) {
 	}
 	res.Volume = vi
 	res.Volume.Root = target
+	res.WholeVolume = isVolumeRoot(target) || isMountRoot(target)
 	res.ClusterSize = volume.ClusterSize(target)
 
 	engine := strings.ToLower(opt.Engine)
@@ -116,4 +117,16 @@ func scanWalk(ctx context.Context, root string, res *Result, opt Options) error 
 // isVolumeRoot reports whether t is "X:\".
 func isVolumeRoot(t string) bool {
 	return len(t) == 3 && isLetter(t[0]) && t[1] == ':' && t[2] == '\\'
+}
+
+// isMountRoot reports whether a non-Windows path is the root of its file
+// system (its parent lives on another device, or it is "/").
+func isMountRoot(p string) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	if p == "/" {
+		return true
+	}
+	return deviceID(p) != 0 && deviceID(p) != deviceID(filepath.Dir(p))
 }

@@ -31,7 +31,10 @@ type Result struct {
 	ClusterSize  uint32
 	Admin        bool
 	FromSnapshot bool
-	Warnings     []Warning
+	// WholeVolume: the scan covers a whole volume (needed to reconcile the
+	// used space of the volume with the files seen).
+	WholeVolume bool
+	Warnings    []Warning
 
 	// Engine A details.
 	MFTRecords, MFTBad, MFTBytes uint64

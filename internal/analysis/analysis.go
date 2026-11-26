@@ -51,7 +51,9 @@ func Run(res *engine.Result, cat *rules.Catalog, opt Options) *Analysis {
 	}
 	a.Findings = rules.Evaluate(res.Index, cat, ro)
 	wg.Wait()
-	a.Recon = reclaim.Compute(res, vss)
+	if res.WholeVolume {
+		a.Recon = reclaim.Compute(res, vss)
+	}
 	return a
 }
 

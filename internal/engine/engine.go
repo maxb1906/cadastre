@@ -38,7 +38,7 @@ func ScanImage(ctx context.Context, path string, opt Options) (*Result, error) {
 		return nil, err
 	}
 	defer raw.Close()
-	res := &Result{Engine: EngineMFT, Started: time.Now(), Admin: volume.IsAdmin()}
+	res := &Result{Engine: EngineMFT, Started: time.Now(), Admin: volume.IsAdmin(), WholeVolume: true}
 	res.Volume = volume.Info{Root: `\`, Label: path, FileSystem: "NTFS", Kind: "image"}
 	if err := scanMFT(ctx, raw, res, opt); err != nil {
 		return nil, err
