@@ -1,9 +1,252 @@
-// Cleanup selection and flow (milestone 8).
-export function initClean() {}
+// Cleanup: selection (rules and items), mandatory simulation (dry-run with
+// live checks), explicit confirmation, progress, result. Every safeguard is
+// enforced in Go; this file only presents it.
+import * as App from '../wailsjs/go/main/App';
+import { EventsOn } from '../wailsjs/runtime/runtime';
+import { t } from './i18n';
+import { bytes, count, h } from './format';
+import { state, toast, errorMsg, renderPanel, navigate, refreshMain } from './main';
+
+const sel = {
+  rules: new Set<string>(),
+  entries: new Map<number, string>(), // id → path
+  mode: 'recycle',
+  official: false,
+};
+
+export function initClean() {
+  updateCount();
+}
+
+export function isSelected(id: number) {
+  return sel.entries.has(id);
+}
+
+export async function addToSelection(id?: number, rule?: string) {
+  if (rule) sel.rules.add(rule);
+  if (id !== undefined) sel.entries.set(id, await App.PathOf(id));
+  updateCount();
+  toast(t('clean.in_selection'), 'ok');
+  if (state.tab === 'clean') renderPanel();
+}
+
+function updateCount() {
+  const el = document.getElementById('sel-count');
+  if (el) {
+    const n = sel.rules.size + sel.entries.size;
+    el.textContent = n ? String(n) : '';
+  }
+}
+
 export function cleanPanel(panel: HTMLElement) {
-  panel.textContent = '';
+  const n = sel.rules.size + sel.entries.size;
+  if (!n) {
+    panel.append(h('p', { class: 'muted' }, t('clean.empty')));
+    return;
+  }
+  panel.append(h('h3', { class: 'h3' }, t('clean.selection')));
+  for (const id of sel.rules) {
+    const f = state.findings.find((x: any) => x.id === id);
+    const rm = h('button', { class: 'btn tiny ghost' }, '✕');
+    rm.title = t('clean.remove');
+    rm.onclick = () => {
+      sel.rules.delete(id);
+      updateCount();
+      renderPanel();
+    };
+    panel.append(h('div', { class: 'sel-row' },
+      h('span', { class: 'risk ' + (f?.risk ?? 'orange') }),
+      h('span', { class: 'grow' }, f ? f.title : id),
+      h('span', { class: 'num' }, f ? bytes(f.alloc) : ''), rm));
+  }
+  for (const [id, path] of sel.entries) {
+    const rm = h('button', { class: 'btn tiny ghost' }, '✕');
+    rm.onclick = () => {
+      sel.entries.delete(id);
+      updateCount();
+      renderPanel();
+    };
+    const label = h('span', { class: 'grow path', title: path }, path);
+    label.onclick = async () => navigate(await App.Locate(id), id);
+    panel.append(h('div', { class: 'sel-row' }, h('span', { class: 'risk orange' }), label, rm));
+  }
+  const radio = (value: string, label: string) => {
+    const input = h('input', { type: 'radio', name: 'mode', value });
+    (input as HTMLInputElement).checked = sel.mode === value;
+    input.onchange = () => (sel.mode = value);
+    return h('label', { class: 'opt' }, input, ' ' + label);
+  };
+  const off = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  off.checked = sel.official;
+  off.onchange = () => (sel.official = off.checked);
+  const sim = h('button', { class: 'btn primary' }, '🔍 ' + t('clean.simulate'));
+  sim.onclick = simulate;
+  panel.append(
+    h('h3', { class: 'h3' }, t('clean.mode')),
+    radio('recycle', t('clean.recycle_desc')),
+    radio('permanent', t('clean.permanent_desc')),
+    h('label', { class: 'opt' }, off, ' ' + t('clean.include_official')),
+    h('div', { class: 'f-actions' }, sim));
 }
-export function addToSelection(_id?: number, _rule?: string) {}
-export function isSelected(_id: number) {
-  return false;
+
+async function simulate() {
+  let plan: any;
+  try {
+    plan = await App.PlanClean({ rules: [...sel.rules], entries: [...sel.entries.keys()], mode: sel.mode, official: sel.official } as any);
+  } catch (e) {
+    toast(errorMsg(e), 'error');
+    return;
+  }
+  showPlan(plan);
 }
+
+function showPlan(plan: any) {
+  const overlay = h('div', { class: 'overlay' });
+  const modal = h('div', { class: 'modal' });
+  overlay.append(modal);
+  const close = () => overlay.remove();
+  const hasWork = plan.files > 0 || (plan.official?.length ?? 0) > 0 || plan.items?.length > 0;
+
+  const tabs = h('div', { class: 'tabs' });
+  const body = h('div', { class: 'scroll' });
+  const views: Record<string, () => HTMLElement> = {
+    files: () => {
+      const tbl = h('table', { class: 'tbl' });
+      for (const it of plan.items ?? []) {
+        tbl.append(h('tr', {},
+          h('td', {}, h('span', { class: 'risk ' + it.risk })),
+          h('td', { class: 'path' }, it.path + (it.reparse ? '  ↪' : '')),
+          h('td', { class: 'num' }, bytes(it.alloc))));
+      }
+      if (plan.moreItems) tbl.append(h('tr', {}, h('td', { colspan: '3', class: 'muted' }, t('clean.more', plan.moreItems))));
+      return tbl;
+    },
+    skipped: () => {
+      const box = h('div', {});
+      for (const g of plan.skipped ?? []) {
+        const d = h('details', {}, h('summary', {}, `${g.label} — ${count(g.count)} (${bytes(g.alloc)})`));
+        for (const ex of g.examples ?? []) d.append(h('div', { class: 'path small muted' }, ex));
+        box.append(d);
+      }
+      return box;
+    },
+    official: () => {
+      const box = h('div', {});
+      for (const o of plan.official ?? []) {
+        box.append(h('div', { class: 'finding open' },
+          h('div', { class: 'f-head' }, h('span', { class: 'risk ' + o.risk }), h('div', { class: 'f-title' }, h('b', {}, o.title), h('div', { class: 'muted small' }, o.rule)), h('div', { class: 'f-size' }, bytes(o.alloc))),
+          h('div', { class: 'f-body' }, h('div', { class: 'small muted' }, t('clean.commands')), ...o.commands.map((c: string) => h('div', { class: 'path' }, '> ' + c)))));
+      }
+      return box;
+    },
+  };
+  const tabDefs: [string, string][] = [['files', t('clean.files_tab') + ` (${count(plan.items?.length ?? 0)})`]];
+  if (plan.skipped?.length) tabDefs.push(['skipped', t('clean.skipped_tab') + ` (${count(plan.skipped.reduce((a: number, g: any) => a + g.count, 0))})`]);
+  if (plan.official?.length) tabDefs.push(['official', t('clean.official_tab') + ` (${plan.official.length})`]);
+  const show = (k: string) => {
+    tabs.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', (x as HTMLElement).dataset.tab === k));
+    body.replaceChildren(views[k]());
+  };
+  for (const [k, label] of tabDefs) {
+    const b = h('button', { class: 'tab', 'data-tab': k }, label);
+    b.onclick = () => show(k);
+    tabs.append(b);
+  }
+
+  const orange = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  const restore = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  restore.checked = true;
+  const run = h('button', { class: 'btn danger' }, '🧹 ' + t('clean.run')) as HTMLButtonElement;
+  // When everything selected is orange, nothing would run without the
+  // explicit confirmation.
+  const allOrange = (plan.items ?? []).every((i: any) => i.risk === 'orange') && (plan.official ?? []).every((o: any) => o.risk === 'orange');
+  const sync = () => (run.disabled = !hasWork || (plan.orange && allOrange && !orange.checked));
+  orange.onchange = sync;
+  sync();
+  const script = h('button', { class: 'btn' }, '📜 ' + t('clean.script'));
+  script.onclick = async () => {
+    try {
+      const p = await App.ExportScript(plan.id);
+      if (p) toast(t('ui.saved', p), 'ok');
+    } catch (e) {
+      toast(errorMsg(e), 'error');
+    }
+  };
+  const cancel = h('button', { class: 'btn ghost' }, t('ui.cancel'));
+  cancel.onclick = close;
+  run.onclick = async () => {
+    try {
+      await App.ExecuteClean(plan.id, orange.checked, restore.checked);
+      close();
+      showRunning();
+    } catch (e) {
+      toast(errorMsg(e), 'error');
+    }
+  };
+
+  modal.append(
+    h('h2', {}, t('clean.sim_title')),
+    h('p', {}, h('b', {}, t('clean.sim_summary', count(plan.files), bytes(plan.bytes), t('clean.mode.' + plan.mode)))),
+    h('p', { class: 'small muted' }, '✔ ' + t('clean.sim_checked')),
+    plan.fromSnapshot ? h('div', { class: 'note' }, t('clean.snapshot_note')) : '',
+    tabs, body,
+    h('div', { class: 'foot' },
+      plan.orange ? h('label', { class: 'opt warnbox' }, orange, ' ' + t('clean.confirm_orange')) : '',
+      plan.restorePoint ? h('label', { class: 'opt' }, restore, ' ' + t('clean.restore_point')) : '',
+      h('span', { class: 'spacer' }), script, cancel, run));
+  document.body.append(overlay);
+  show('files');
+  if (!hasWork) toast(t('clean.no_items'));
+}
+
+let runOverlay: HTMLElement | null = null;
+
+function showRunning() {
+  const stop = h('button', { class: 'btn' }, t('ui.cancel'));
+  stop.onclick = () => App.CancelClean();
+  runOverlay = h('div', { class: 'overlay' },
+    h('div', { class: 'progress-box' },
+      h('div', { class: 'spinner' }),
+      h('h2', {}, t('clean.running')),
+      h('div', { class: 'meter big' }, h('span', { id: 'cbar', style: 'width:0%' })),
+      h('div', { id: 'ctext', class: 'muted path' }, ''),
+      stop));
+  document.body.append(runOverlay);
+}
+
+EventsOn('clean:progress', (p: any) => {
+  const bar = document.getElementById('cbar');
+  const txt = document.getElementById('ctext');
+  if (bar) bar.style.width = (100 * p.done) / Math.max(1, p.total) + '%';
+  if (txt) txt.textContent = `${count(p.done)} / ${count(p.total)} · ${bytes(p.freed)} — ${p.path}`;
+});
+
+EventsOn('clean:error', (msg: string) => {
+  runOverlay?.remove();
+  toast(t('ui.error') + ' : ' + msg, 'error');
+});
+
+EventsOn('clean:done', async (r: any) => {
+  runOverlay?.remove();
+  sel.rules.clear();
+  sel.entries.clear();
+  const journal = h('button', { class: 'btn' }, '📒 ' + r.journal);
+  journal.onclick = () => App.OpenJournalFolder();
+  const ok = h('button', { class: 'btn primary' }, t('clean.close'));
+  const overlay = h('div', { class: 'overlay' });
+  const tbl = h('table', { class: 'tbl' });
+  for (const e of (r.entries ?? []).slice(0, 500)) {
+    tbl.append(h('tr', {}, h('td', { class: 'small muted' }, e.time), h('td', {}, e.action), h('td', { class: 'path' }, e.path), h('td', { class: 'num' }, e.size ? bytes(e.size) : ''), h('td', { class: 'small' }, e.result)));
+  }
+  overlay.append(h('div', { class: 'modal' },
+    h('h2', {}, t('clean.done_title')),
+    h('p', {}, h('b', {}, t('clean.result', r.done, r.failed, r.skipped, bytes(r.freed)))),
+    r.freeBefore ? h('p', { class: 'muted' }, t('clean.freed_real', bytes(r.freeBefore), bytes(r.freeAfter))) : '',
+    h('div', { class: 'scroll' }, tbl),
+    h('div', { class: 'foot' }, journal, h('span', { class: 'spacer' }), ok)));
+  ok.onclick = () => overlay.remove();
+  document.body.append(overlay);
+  // Refresh the whole view from the updated index.
+  await refreshMain();
+  updateCount();
+});

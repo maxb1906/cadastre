@@ -1,3 +1,46 @@
+export namespace clean {
+	
+	export class Item {
+	    entry: number;
+	    path: string;
+	    rule?: string;
+	    risk: string;
+	    dir?: boolean;
+	    reparse?: boolean;
+	    size: number;
+	    alloc: number;
+	    mtime: number;
+	    fileId?: number;
+	    hardlink?: boolean;
+	    permanentOnly?: boolean;
+	    system?: boolean;
+	    closeFirst?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Item(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.entry = source["entry"];
+	        this.path = source["path"];
+	        this.rule = source["rule"];
+	        this.risk = source["risk"];
+	        this.dir = source["dir"];
+	        this.reparse = source["reparse"];
+	        this.size = source["size"];
+	        this.alloc = source["alloc"];
+	        this.mtime = source["mtime"];
+	        this.fileId = source["fileId"];
+	        this.hardlink = source["hardlink"];
+	        this.permanentOnly = source["permanentOnly"];
+	        this.system = source["system"];
+	        this.closeFirst = source["closeFirst"];
+	    }
+	}
+
+}
+
 export namespace index {
 	
 	export class ExtStat {
@@ -75,6 +118,24 @@ export namespace index {
 
 export namespace main {
 	
+	export class CleanRequest {
+	    rules: string[];
+	    entries: number[];
+	    mode: string;
+	    official: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CleanRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rules = source["rules"];
+	        this.entries = source["entries"];
+	        this.mode = source["mode"];
+	        this.official = source["official"];
+	    }
+	}
 	export class Info {
 	    version: string;
 	    lang: string;
@@ -97,6 +158,103 @@ export namespace main {
 	        this.rules = source["rules"];
 	    }
 	}
+	export class OfficialView {
+	    rule: string;
+	    title: string;
+	    risk: string;
+	    commands: string[];
+	    items: number;
+	    alloc: number;
+	    restorePoint: boolean;
+	    targets: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OfficialView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rule = source["rule"];
+	        this.title = source["title"];
+	        this.risk = source["risk"];
+	        this.commands = source["commands"];
+	        this.items = source["items"];
+	        this.alloc = source["alloc"];
+	        this.restorePoint = source["restorePoint"];
+	        this.targets = source["targets"];
+	    }
+	}
+	export class SkipGroup {
+	    reason: string;
+	    label: string;
+	    count: number;
+	    alloc: number;
+	    examples: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SkipGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.reason = source["reason"];
+	        this.label = source["label"];
+	        this.count = source["count"];
+	        this.alloc = source["alloc"];
+	        this.examples = source["examples"];
+	    }
+	}
+	export class PlanView {
+	    id: string;
+	    mode: string;
+	    files: number;
+	    bytes: number;
+	    orange: boolean;
+	    fromSnapshot: boolean;
+	    items: clean.Item[];
+	    moreItems: number;
+	    skipped: SkipGroup[];
+	    official: OfficialView[];
+	    restorePoint: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlanView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.mode = source["mode"];
+	        this.files = source["files"];
+	        this.bytes = source["bytes"];
+	        this.orange = source["orange"];
+	        this.fromSnapshot = source["fromSnapshot"];
+	        this.items = this.convertValues(source["items"], clean.Item);
+	        this.moreItems = source["moreItems"];
+	        this.skipped = this.convertValues(source["skipped"], SkipGroup);
+	        this.official = this.convertValues(source["official"], OfficialView);
+	        this.restorePoint = source["restorePoint"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Summary {
 	    root: string;
 	    rootId: number;

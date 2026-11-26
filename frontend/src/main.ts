@@ -350,6 +350,11 @@ async function showMain(dir: number) {
   renderPanel();
 }
 
+/** Re-renders the main screen from the current (possibly cleaned) index. */
+export async function refreshMain() {
+  await showMain(state.dir);
+}
+
 function stat(k: string, v: string, sub: string, cls = '') {
   return h('div', { class: 'stat ' + cls }, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v), h('div', { class: 's' }, sub));
 }

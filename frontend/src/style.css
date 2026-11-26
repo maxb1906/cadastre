@@ -146,3 +146,12 @@ select { font: inherit; background: var(--panel2); color: var(--text); border: 1
 .toolbar .root { flex: 0 1 auto; min-width: 60px; }
 .toolbar .badges { flex: none; }
 .tab { font-size: 12px; padding: 9px 2px; }
+.h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 14px 0 6px; }
+.sel-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--line); }
+.sel-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.opt { display: flex; align-items: center; gap: 6px; padding: 4px 0; cursor: pointer; }
+.warnbox { color: var(--warn); font-weight: 600; }
+.modal .tabs { margin-top: 6px; }
+.modal details { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.modal summary { cursor: pointer; }
+.modal .tbl td.path { word-break: break-all; }

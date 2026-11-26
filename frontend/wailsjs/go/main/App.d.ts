@@ -4,9 +4,15 @@ import {view} from '../models';
 import {index} from '../models';
 import {main} from '../models';
 
+export function CancelClean():Promise<void>;
+
 export function CancelScan():Promise<void>;
 
+export function ExecuteClean(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
+
 export function Export(arg1:string):Promise<string>;
+
+export function ExportScript(arg1:string):Promise<string>;
 
 export function GetChildren(arg1:number,arg2:string,arg3:number,arg4:number):Promise<view.Listing>;
 
@@ -28,11 +34,15 @@ export function ListVolumes():Promise<Array<main.VolumeView>>;
 
 export function Locate(arg1:number):Promise<number>;
 
+export function OpenJournalFolder():Promise<void>;
+
 export function OpenSnapshot(arg1:string):Promise<void>;
 
 export function PathOf(arg1:number):Promise<string>;
 
 export function PickFolder():Promise<string>;
+
+export function PlanClean(arg1:main.CleanRequest):Promise<main.PlanView>;
 
 export function Reveal(arg1:number):Promise<void>;
 
