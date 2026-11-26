@@ -180,7 +180,7 @@ func (b *builder) applyBase(rec *ntfs.Record, out *chunkResult) {
 	b.parentSeq[i] = fn.ParentSeq
 	ix.Size[i] = size
 	ix.Alloc[i] = alloc
-	ix.MTime[i] = rec.Modified
+	ix.MTime[i] = index.FileTimeToUnix(rec.Modified)
 	ix.Seq[i] = rec.Seq
 	if rec.RecNo == ntfs.RecRoot {
 		ix.Parent[i] = index.NoParent
