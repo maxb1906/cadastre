@@ -8,6 +8,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +38,13 @@ func (v testVol) mk(rel string, size int, age time.Duration) string {
 }
 
 func newVolume(t *testing.T) testVol {
+	if runtime.GOOS == "windows" {
+		// The fixture is a temp folder used as a fake volume root, with
+		// POSIX links and permissions: on Windows the rules are relative to
+		// the real volume (C:\). Real cleanups on Windows are covered by
+		// integration_windows_test.go on the test VHDX.
+		t.Skip("fake volume root: POSIX only, see integration_windows_test.go")
+	}
 	v := testVol{root: t.TempDir(), t: t}
 	week := 10 * 24 * time.Hour
 	v.mk("Windows/Temp/old1.tmp", 1000, week)
@@ -69,6 +78,12 @@ func reasons(p *Plan) map[string]int {
 	return m
 }
 
+func sortedPaths(items []Item) string {
+	s := strings.Split(paths(items), ",")
+	sort.Strings(s)
+	return strings.Join(s, ",")
+}
+
 func paths(items []Item) string {
 	var out []string
 	for _, it := range items {
@@ -96,7 +111,8 @@ func TestPlanGuardrails(t *testing.T) {
 		t.Errorf("recycle mode on temp: items=%s skipped=%v", paths(p.Items), reasons(p))
 	}
 	p = Build(a, Selection{Rules: []string{"temp"}, Mode: ModePermanent}, env)
-	if paths(p.Items) != "old1.tmp,old2.tmp" || p.Files != 2 || p.Orange {
+	// Files of different folders: their order follows the directory listing.
+	if sortedPaths(p.Items) != "old1.tmp,old2.tmp" || p.Files != 2 || p.Orange {
 		t.Errorf("temp permanent: %s files=%d", paths(p.Items), p.Files)
 	}
 	// Without admin, system rules are greyed out.

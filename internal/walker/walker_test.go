@@ -4,12 +4,19 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/maxb1906/cadastre/internal/index"
 )
 
 func TestWalk(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// chmod 0 does not deny access and symlinks need a privilege on
+		// Windows; the walker is checked there against the MFT engine on
+		// the test VHDX (engine integration test).
+		t.Skip("POSIX permissions and symlinks")
+	}
 	root := t.TempDir()
 	mk := func(rel string, size int) {
 		p := filepath.Join(root, rel)

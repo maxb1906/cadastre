@@ -18,6 +18,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      - name: Frontend (embarqué dans l'exe, requis par go test ./...)
+        run: |
+          cd frontend
+          npm ci
+          npm run build
       - run: go test ./...
       - name: Build
         run: |
